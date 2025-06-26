@@ -16,13 +16,8 @@ conda activate synctalk_2d
 # install dependencies
 conda install pytorch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 pytorch-cuda=12.1 -c pytorch -c nvidia
 conda install -c conda-forge ffmpeg  #very important
-pip install opencv-python
-pip install transformers
+pip install opencv-python transformers soundfile librosa onnxruntime-gpu configargparse
 pip install numpy==1.23.5
-pip install soundfile
-pip install librosa
-pip install onnxruntime-gpu
-pip install configargparse
 ```
 
 ## Prepare your data
