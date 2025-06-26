@@ -15,7 +15,7 @@ conda activate synctalk_2d
 ``` bash
 # install dependencies
 conda install pytorch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 pytorch-cuda=12.1 -c pytorch -c nvidia
-conda install ffmpeg
+conda install -c conda-forge ffmpeg  #very important
 pip install opencv-python
 pip install transformers
 pip install numpy==1.23.5
