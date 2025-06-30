@@ -2,6 +2,13 @@
 # input: bash training_328.sh file_name cuda_id
 file_name=$1
 cuda_id=$2
+
+if [ -z "$cuda_id" ]; then
+    echo "Error: You must specify a cuda_id."
+    echo "Usage: $0 file_name cuda_id"
+    exit 1
+fi
+
 asr="ave"
 file_path="./dataset/$file_name/$file_name.mp4"
 data_dir="./dataset/$file_name"

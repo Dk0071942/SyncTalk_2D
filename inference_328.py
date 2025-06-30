@@ -154,6 +154,6 @@ for i in tqdm(range(audio_feats.shape[0])):
 video_writer.release()
 
 # os.system(f"ffmpeg -i {save_path.replace('.mp4', 'temp.mp4')} -i {audio_path} -c:v libx264 -c:a aac {save_path}")
-os.system(f"ffmpeg -i {save_path.replace('.mp4', 'temp.mp4')} -i {audio_path} -c:v libx264 -c:a aac -crf 20 {save_path} -y")
+os.system(f"ffmpeg -y -v error -nostats -i {save_path.replace('.mp4', 'temp.mp4')} -i {audio_path} -c:v libx264 -c:a aac -crf 20 {save_path}")
 os.system(f"rm {save_path.replace('.mp4', 'temp.mp4')}")
 print(f"[INFO] ===== save video to {save_path} =====")

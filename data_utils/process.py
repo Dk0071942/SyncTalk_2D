@@ -6,7 +6,7 @@ from tqdm import tqdm
 def extract_audio(path, out_path, sample_rate=16000):
     
     print(f'[INFO] ===== extract audio from {path} to {out_path} =====')
-    cmd = f'ffmpeg -i {path} -f wav -ar {sample_rate} {out_path}'
+    cmd = f'ffmpeg -y -v error -nostats -i {path} -f wav -ar {sample_rate} {out_path}'
     os.system(cmd)
     print(f'[INFO] ===== extracted audio =====')
     
@@ -22,7 +22,7 @@ def extract_images(path):
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps != 25:
         # High quality conversion to 25fps using ffmpeg
-        cmd = f'ffmpeg -i {path} -vf "fps=25" -c:v libx264 -c:a aac {path.replace(".mp4", "_25fps.mp4")}'
+        cmd = f'ffmpeg -y -v error -nostats -i {path} -vf "fps=25" -c:v libx264 -c:a aac {path.replace(".mp4", "_25fps.mp4")}'
         os.system(cmd)
         path = path.replace(".mp4", "_25fps.mp4")
     
