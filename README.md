@@ -14,13 +14,14 @@ conda activate synctalk_2d
 ```
 ``` bash
 # install dependencies
-conda install pytorch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 pytorch-cuda=12.1 -c pytorch -c nvidia
-conda install -c conda-forge ffmpeg  #very important
-pip install opencv-python transformers soundfile librosa onnxruntime-gpu configargparse
+conda install pytorch==2.7.1 torchvision==0.17.0 torchaudio==2.2.0 pytorch-cuda=12.8 -c pytorch -c nvidia
+conda install -c conda-forge 'ffmpeg=4.3.*' x264  #very important
+pip install opencv-python transformers soundfile librosa==0.10.1 onnxruntime-gpu configargparse
 pip install numpy==1.23.5
 ```
 
-## Prepare your data
+## Prepare your dataclear
+
 1. Record a 5-minute video with your head facing the camera and without significant movement. At the same time, ensure that the camera does not move and the background light remains unchanged during video recording.
 2. Don't worry about FPS, the code will automatically convert the video to 25fps.
 3. No second person's voice can appear in the recorded video, and a 5-second silent clip is left at the beginning and end of the video.
