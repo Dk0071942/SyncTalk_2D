@@ -85,6 +85,8 @@ class Landmark:
 
         h,w = img_ori.shape[:2]
         cropped_imgs, boxes_list, center_list, alpha_list = face_det(img, self.det_net)
+        if len(boxes_list) == 0:
+            return None, None, None
         cropped = cropped_imgs[0]
         # cv2.imshow("cropped", cropped)
         h,w = cropped.shape[:2]

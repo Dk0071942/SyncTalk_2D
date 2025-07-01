@@ -14,7 +14,7 @@ conda activate synctalk_2d
 ```
 ``` bash
 # install dependencies
-conda install pytorch==2.7.1 torchvision==0.17.0 torchaudio==2.2.0 pytorch-cuda=12.8 -c pytorch -c nvidia
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 conda install -c conda-forge 'ffmpeg=4.3.*' x264  #very important
 pip install opencv-python transformers soundfile librosa==0.10.1 onnxruntime-gpu configargparse
 pip install numpy==1.23.5
@@ -54,6 +54,11 @@ python inference_328.py --name data_name --audio_path path_to_audio.wav
 - example: python inference_328.py --name May --audio_path demo/talk_hb.wav
 
 - the result will be saved in the 'result' folder
+
+To do batch processing for all audio files inside one folder
+``` bash
+./batch_inference.sh name path_to_audio_folder
+```
 
 ## Acknowledgements
 This code is based on [Ultralight-Digital-Human](https://github.com/anliyuan/Ultralight-Digital-Human) and [SyncTalk](https://github.com/ZiqiaoPeng/SyncTalk). We thank the authors for their excellent work.

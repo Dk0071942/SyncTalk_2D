@@ -14,31 +14,45 @@ def extract_images(path):
     
     
     full_body_dir = path.replace(path.split("/")[-1], "full_body_img")
-    if not os.path.exists(full_body_dir):
-        os.mkdir(full_body_dir)
+    os.makedirs(full_body_dir, exist_ok=True)
     
-    counter = 0
-    cap = cv2.VideoCapture(path)
+    # Determine the correct video path (handling 25fps conversion)
+    video_to_process = path
+    cap = cv2.VideoCapture(video_to_process)
     fps = cap.get(cv2.CAP_PROP_FPS)
+    
     if fps != 25:
+        cap.release()
         # High quality conversion to 25fps using ffmpeg
-        cmd = f'ffmpeg -y -v error -nostats -i {path} -vf "fps=25" -c:v libx264 -c:a aac {path.replace(".mp4", "_25fps.mp4")}'
+        converted_path = video_to_process.replace(".mp4", "_25fps.mp4")
+        cmd = f'ffmpeg -y -v error -nostats -i "{video_to_process}" -vf "fps=25" -c:v libx264 -c:a aac "{converted_path}"'
         os.system(cmd)
-        path = path.replace(".mp4", "_25fps.mp4")
-    
-    cap = cv2.VideoCapture(path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps != 25:
+        video_to_process = converted_path
+        cap = cv2.VideoCapture(video_to_process)
+
+    # Check if images are already extracted and complete
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    num_existing_images = len([f for f in os.listdir(full_body_dir) if f.endswith('.jpg')])
+
+    if num_existing_images >= total_frames and total_frames > 0:
+        print(f'[INFO] ===== Images for {path} already extracted. Skipping. =====')
+        cap.release()
+        return
+
+    # This check is important to ensure the final video is 25fps.
+    if cap.get(cv2.CAP_PROP_FPS) != 25:
         raise ValueError("Your video fps should be 25!!!")
         
     print("extracting images...")
+    counter = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-        cv2.imwrite(full_body_dir+"/"+str(counter)+'.jpg', frame)
+        cv2.imwrite(os.path.join(full_body_dir, str(counter)+'.jpg'), frame)
         counter += 1
-        
+    cap.release()
+    
 def get_audio_feature(wav_path):
     
     print("extracting audio feature...")
@@ -56,7 +70,11 @@ def get_landmark(path, landmarks_dir):
             continue
         img_path = os.path.join(full_img_dir, img_name)
         lms_path = os.path.join(landmarks_dir, img_name.replace(".jpg", ".lms"))
+        if os.path.exists(lms_path):
+            continue
         pre_landmark, x1, y1 = landmark.detect(img_path)
+        if pre_landmark is None:
+            continue
         with open(lms_path, "w") as f:
             for p in pre_landmark:
                 x, y = p[0]+x1, p[1]+y1
