@@ -13,3 +13,4 @@ syncnet_ckpt/
 audio_material/
 checkpoint/
 result/
+gradio_outputs/
