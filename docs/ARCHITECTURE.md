@@ -163,8 +163,12 @@ for each audio frame:
 
 **Audio-Visual Alignment:**
 - 16-frame audio window centered on current frame
-- Handles boundary cases with zero-padding
-- Maintains temporal consistency
+- Special boundary handling for end-of-audio:
+  - When accessing frames beyond audio end, entire 16-frame window uses last frame's features
+  - Prevents mouth movement artifacts during silence at video end
+  - Ensures consistent neutral mouth position for final ~0.6 seconds
+- Beginning frames use first frame features for padding
+- Maintains temporal consistency throughout
 
 **Performance Optimizations:**
 - Batch processing for audio features
