@@ -66,19 +66,26 @@ class AudioEncoder(nn.Module):
 def get_audio_features(features, index):
     left = index - 8
     right = index + 8
+    
+    # If we need padding on the right (at the end of audio), 
+    # return a full window of the last frame's features
+    if right > features.shape[0]:
+        # Return 16 frames of the last frame's features
+        last_frame = torch.from_numpy(features[-1:])  # Shape: [1, feature_dim]
+        return last_frame.repeat(16, 1)  # Shape: [16, feature_dim]
+    
+    # Handle padding on the left (at the beginning)
     pad_left = 0
-    pad_right = 0
     if left < 0:
         pad_left = -left
         left = 0
-    if right > features.shape[0]:
-        pad_right = right - features.shape[0]
-        right = features.shape[0]
+        
     auds = torch.from_numpy(features[left:right])
     if pad_left > 0:
-        auds = torch.cat([torch.zeros_like(auds[:pad_left]), auds], dim=0)
-    if pad_right > 0:
-        auds = torch.cat([auds, torch.zeros_like(auds[:pad_right])], dim=0) # [8, 16]
+        # For beginning padding, use the first frame
+        first_frame = torch.from_numpy(features[0:1])
+        auds = torch.cat([first_frame.repeat(pad_left, 1), auds], dim=0)
+    
     return auds
 
 

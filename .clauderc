@@ -28,7 +28,13 @@
     "- Maintain clear separation of concerns",
     "- Structure codebase for easy overview accessibility",
     "- Use clear module boundaries and well-named classes and functions",
-    "- Facilitate rapid onboarding and troubleshooting through good organization"
+    "- Facilitate rapid onboarding and troubleshooting through good organization",
+    
+    "FILE CREATION GUIDELINES:",
+    "- NEVER create test files (test.py, test_*.py, *_test.py) unless explicitly requested by the user",
+    "- Avoid creating example or demo scripts unless specifically asked",
+    "- Focus on modifying existing code rather than creating new files",
+    "- Only create new files when necessary for the core functionality requested"
   ],
   "memory": {
     "project_context": "Following strict modular architecture principles with emphasis on single responsibility and reusability",
