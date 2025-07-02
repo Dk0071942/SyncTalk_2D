@@ -7,9 +7,193 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Optional, Callable, Tuple
 import time
+import tempfile
+import shutil
+import sys
+sys.path.append('./data_utils')
 
 from unet_328 import Model
 from utils import AudioEncoder, AudDataset, get_audio_features
+from data_utils.get_landmark import Landmark
+
+
+class VideoProcessor:
+    """Process uploaded videos to extract frames and landmarks."""
+    
+    def __init__(self, temp_dir: str = None):
+        """
+        Initialize video processor.
+        
+        Args:
+            temp_dir: Temporary directory for processing. Created if None.
+        """
+        if temp_dir is None:
+            self.temp_dir = tempfile.mkdtemp(prefix="synctalk_")
+        else:
+            self.temp_dir = temp_dir
+            os.makedirs(temp_dir, exist_ok=True)
+            
+        self.frames_dir = os.path.join(self.temp_dir, "frames")
+        self.landmarks_dir = os.path.join(self.temp_dir, "landmarks")
+        os.makedirs(self.frames_dir, exist_ok=True)
+        os.makedirs(self.landmarks_dir, exist_ok=True)
+        
+        self.landmark_detector = None
+        
+    def _init_landmark_detector(self):
+        """Initialize landmark detector lazily."""
+        if self.landmark_detector is None:
+            self.landmark_detector = Landmark()
+    
+    def extract_frames(self, video_path: str, progress_callback: Optional[Callable] = None) -> int:
+        """
+        Extract frames from video, converting to 25fps if needed.
+        
+        Args:
+            video_path: Path to input video
+            progress_callback: Optional callback(current, total, message)
+            
+        Returns:
+            Number of frames extracted
+        """
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Convert to 25fps if needed
+        video_to_process = video_path
+        if abs(fps - 25.0) > 0.1:  # Not 25fps
+            cap.release()
+            if progress_callback:
+                progress_callback(0, 100, "Converting video to 25fps...")
+            
+            converted_path = os.path.join(self.temp_dir, "video_25fps.mp4")
+            cmd = f'ffmpeg -y -v error -nostats -i "{video_path}" -vf "fps=25" -c:v libx264 "{converted_path}"'
+            os.system(cmd)
+            video_to_process = converted_path
+            cap = cv2.VideoCapture(converted_path)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Extract frames
+        if progress_callback:
+            progress_callback(0, total_frames, "Extracting frames...")
+            
+        frame_count = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            frame_path = os.path.join(self.frames_dir, f"{frame_count}.jpg")
+            cv2.imwrite(frame_path, frame)
+            frame_count += 1
+            
+            if progress_callback and frame_count % 10 == 0:
+                progress_callback(frame_count, total_frames, f"Extracting frame {frame_count}/{total_frames}")
+        
+        cap.release()
+        return frame_count
+    
+    def detect_landmarks(self, progress_callback: Optional[Callable] = None) -> bool:
+        """
+        Detect landmarks for all extracted frames.
+        
+        Args:
+            progress_callback: Optional callback(current, total, message)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        self._init_landmark_detector()
+        
+        frame_files = sorted(
+            [f for f in os.listdir(self.frames_dir) if f.endswith('.jpg')],
+            key=lambda x: int(x.split('.')[0])
+        )
+        
+        if not frame_files:
+            return False
+            
+        total_frames = len(frame_files)
+        if progress_callback:
+            progress_callback(0, total_frames, "Detecting landmarks...")
+        
+        last_landmarks = None
+        successful_detections = 0
+        
+        for idx, frame_file in enumerate(frame_files):
+            frame_path = os.path.join(self.frames_dir, frame_file)
+            lms_path = os.path.join(self.landmarks_dir, frame_file.replace('.jpg', '.lms'))
+            
+            # Detect landmarks
+            try:
+                pre_landmark, x1, y1 = self.landmark_detector.detect(frame_path)
+                
+                if pre_landmark is not None:
+                    # Save landmarks
+                    lms_lines = []
+                    for p in pre_landmark:
+                        x, y = p[0] + x1, p[1] + y1
+                        lms_lines.append(f"{x} {y}")
+                    
+                    landmarks_content = "\n".join(lms_lines) + "\n"
+                    with open(lms_path, "w") as f:
+                        f.write(landmarks_content)
+                    
+                    last_landmarks = landmarks_content
+                    successful_detections += 1
+                else:
+                    # Use last valid landmarks if available
+                    if last_landmarks:
+                        with open(lms_path, "w") as f:
+                            f.write(last_landmarks)
+                    else:
+                        print(f"Warning: No landmarks detected for frame {idx}")
+                        
+            except Exception as e:
+                print(f"Error detecting landmarks for frame {idx}: {e}")
+                # Use last valid landmarks if available
+                if last_landmarks:
+                    with open(lms_path, "w") as f:
+                        f.write(last_landmarks)
+            
+            if progress_callback and (idx + 1) % 10 == 0:
+                progress_callback(idx + 1, total_frames, f"Detecting landmarks {idx + 1}/{total_frames}")
+        
+        if progress_callback:
+            progress_callback(total_frames, total_frames, "Landmark detection complete")
+            
+        return successful_detections > 0
+    
+    def process_video(self, video_path: str, progress_callback: Optional[Callable] = None) -> Tuple[str, str, int]:
+        """
+        Process video to extract frames and landmarks.
+        
+        Args:
+            video_path: Path to input video
+            progress_callback: Optional callback(current, total, message)
+            
+        Returns:
+            Tuple of (frames_dir, landmarks_dir, num_frames)
+        """
+        # Extract frames
+        num_frames = self.extract_frames(video_path, progress_callback)
+        
+        if num_frames == 0:
+            raise ValueError("No frames extracted from video")
+        
+        # Detect landmarks
+        success = self.detect_landmarks(progress_callback)
+        
+        if not success:
+            raise ValueError("Failed to detect any landmarks in video")
+        
+        return self.frames_dir, self.landmarks_dir, num_frames
+    
+    def cleanup(self):
+        """Remove temporary files."""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
 
 class SyncTalkInference:
@@ -185,6 +369,8 @@ class SyncTalkInference:
     def generate_video(self, audio_path: str, output_path: str,
                       start_frame: int = 0, loop_back: bool = True,
                       use_parsing: bool = False,
+                      custom_img_dir: Optional[str] = None,
+                      custom_lms_dir: Optional[str] = None,
                       progress_callback: Optional[Callable[[int, int, str], None]] = None) -> str:
         """
         Generate a complete video from audio.
@@ -195,6 +381,8 @@ class SyncTalkInference:
             start_frame: Starting frame index
             loop_back: Whether to loop back to start frame
             use_parsing: Whether to use parsing masks
+            custom_img_dir: Optional custom directory with frames (overrides model dataset)
+            custom_lms_dir: Optional custom directory with landmarks (overrides model dataset)
             progress_callback: Optional callback for progress updates
                               Called with (current_frame, total_frames, message)
                               
@@ -208,16 +396,21 @@ class SyncTalkInference:
         audio_feats = self.process_audio(audio_path)
         total_frames = audio_feats.shape[0]
         
+        # Use custom directories if provided, otherwise use model dataset
+        img_dir = custom_img_dir if custom_img_dir else self.img_dir
+        lms_dir = custom_lms_dir if custom_lms_dir else self.lms_dir
+        
         # Check available frames
-        len_img = len(os.listdir(self.img_dir)) - 1
+        img_files = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
+        len_img = len(img_files)
         
         # Get video dimensions from first frame
-        exm_img = cv2.imread(os.path.join(self.img_dir, "0.jpg"))
+        exm_img = cv2.imread(os.path.join(img_dir, "0.jpg"))
         h, w = exm_img.shape[:2]
         
         # Prepare parsing directory if needed
         parsing_dir = None
-        if use_parsing:
+        if use_parsing and not custom_img_dir:  # Only use parsing for model dataset
             parsing_dir = os.path.join(self.dataset_dir, "parsing/")
             if not os.path.exists(parsing_dir):
                 print(f"Warning: Parsing directory not found at {parsing_dir}")
@@ -255,8 +448,8 @@ class SyncTalkInference:
             img_idx += step_stride
             
             # Load current frame and landmarks
-            img_path = os.path.join(self.img_dir, f"{img_idx + start_frame}.jpg")
-            lms_path = os.path.join(self.lms_dir, f"{img_idx + start_frame}.lms")
+            img_path = os.path.join(img_dir, f"{img_idx + start_frame}.jpg")
+            lms_path = os.path.join(lms_dir, f"{img_idx + start_frame}.lms")
             
             img = cv2.imread(img_path)
             

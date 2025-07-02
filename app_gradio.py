@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import time
 import traceback
-from inference_module import SyncTalkInference
+from inference_module import SyncTalkInference, VideoProcessor
 
 
 class SyncTalkGradio:
@@ -26,9 +26,9 @@ class SyncTalkGradio:
         
         return sorted(models)
     
-    def generate_video(self, model_name, audio_file, start_frame=0, asr_mode="ave", 
+    def generate_video(self, model_name, audio_file, video_file=None, start_frame=0, asr_mode="ave", 
                       loop_back=True, progress=gr.Progress()):
-        """Generate video using the new inference module"""
+        """Generate video using the new inference module with optional video template"""
         
         try:
             # Validate inputs
@@ -58,6 +58,33 @@ class SyncTalkGradio:
             output_filename = f"{model_name}_{audio_name}_{timestamp}.mp4"
             output_path = self.output_dir / output_filename
             
+            # Process uploaded video if provided
+            custom_img_dir = None
+            custom_lms_dir = None
+            video_processor = None
+            
+            if video_file:
+                progress(0.25, desc="Processing uploaded video...")
+                video_processor = VideoProcessor()
+                
+                try:
+                    # Define progress callback for video processing
+                    def video_progress_callback(current, total, message):
+                        # Scale progress from 0.25 to 0.3
+                        if total > 0:
+                            scaled_progress = 0.25 + (current / total) * 0.05
+                            progress(scaled_progress, desc=message)
+                    
+                    custom_img_dir, custom_lms_dir, num_frames = video_processor.process_video(
+                        video_file, progress_callback=video_progress_callback
+                    )
+                    print(f"Processed video: {num_frames} frames extracted")
+                    
+                except Exception as e:
+                    if video_processor:
+                        video_processor.cleanup()
+                    return None, f"Failed to process video: {str(e)}"
+            
             # Define progress callback for Gradio
             def gradio_progress_callback(current, total, message):
                 # Scale progress from 0.3 to 0.95
@@ -70,11 +97,17 @@ class SyncTalkGradio:
             generated_path = inference.generate_video(
                 audio_path=audio_file,
                 output_path=str(output_path),
-                start_frame=start_frame,
+                start_frame=start_frame if not video_file else 0,  # Start from 0 for custom videos
                 loop_back=loop_back,
                 use_parsing=False,  # Can be exposed as option later
+                custom_img_dir=custom_img_dir,
+                custom_lms_dir=custom_lms_dir,
                 progress_callback=gradio_progress_callback
             )
+            
+            # Cleanup video processor if used
+            if video_processor:
+                video_processor.cleanup()
             
             # Finalize
             progress(1.0, desc="Done!")
@@ -127,6 +160,11 @@ def create_interface():
                     type="filepath"
                 )
                 
+                # Video input (optional)
+                video_input = gr.Video(
+                    label="Upload Video Template (Optional) - Leave empty to use model's default character"
+                )
+                
                 # Advanced options
                 with gr.Accordion("Advanced Options", open=False):
                     start_frame = gr.Number(
@@ -177,12 +215,13 @@ def create_interface():
             example_list = []
             for model in ["LS1", "AD2.2"]:
                 if model in available_models and demo_files:
-                    example_list.append([model, demo_files[0], 0, "ave", True])
+                    # Add example with None for video_input
+                    example_list.append([model, demo_files[0], None, 0, "ave", True])
             
             if example_list:
                 gr.Examples(
                     examples=example_list,
-                    inputs=[model_dropdown, audio_input, start_frame, asr_mode, loop_back],
+                    inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, loop_back],
                     outputs=[output_video, status_text],
                     fn=app.generate_video,
                     cache_examples=False
@@ -194,14 +233,18 @@ def create_interface():
         
         1. **Select a Model**: Choose from the available trained models in the dropdown
         2. **Upload Audio**: Upload a WAV audio file (clear speech works best)
-        3. **Configure Options** (Optional): Adjust advanced settings if needed
-        4. **Generate**: Click the Generate Video button and wait for processing
-        5. **Download**: Right-click on the video to save it
+        3. **Upload Video** (Optional): Upload a video to use as template character
+           - Leave empty to use the model's default character
+           - Upload any video with a clear face to use that person as template
+        4. **Configure Options** (Optional): Adjust advanced settings if needed
+        5. **Generate**: Click the Generate Video button and wait for processing
+        6. **Download**: Right-click on the video to save it
         
         ## Notes
         
         - Video generation typically takes 1-3 minutes depending on audio length
-        - Ensure your audio is clear and without background noise
+        - When uploading a video template, ensure the face is clearly visible
+        - Videos will be automatically converted to 25fps if needed
         - The model works best with the same language it was trained on
         - Generated videos are saved in the `gradio_outputs` folder
         - Enable "Loop back to start frame" for seamless video loops
@@ -210,7 +253,7 @@ def create_interface():
         # Set up event
         generate_btn.click(
             fn=app.generate_video,
-            inputs=[model_dropdown, audio_input, start_frame, asr_mode, loop_back],
+            inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, loop_back],
             outputs=[output_video, status_text]
         )
     
