@@ -65,23 +65,37 @@ def get_landmark(path, landmarks_dir):
     from get_landmark import Landmark
     landmark = Landmark()
     
-    for img_name in tqdm(os.listdir(full_img_dir)):
+    # Sort the image file names numerically
+    img_files = sorted(os.listdir(full_img_dir), key=lambda x: int(x.split('.')[0]))
+
+    last_lms_content = None
+    for img_name in tqdm(img_files):
         if not img_name.endswith(".jpg"):
             continue
         img_path = os.path.join(full_img_dir, img_name)
         lms_path = os.path.join(landmarks_dir, img_name.replace(".jpg", ".lms"))
         if os.path.exists(lms_path):
+            with open(lms_path, 'r') as f:
+                last_lms_content = f.read()
             continue
         pre_landmark, x1, y1 = landmark.detect(img_path)
         if pre_landmark is None:
+            if last_lms_content:
+                with open(lms_path, "w") as f:
+                    f.write(last_lms_content)
             continue
+
+        lms_lines = []
+        for p in pre_landmark:
+            x, y = p[0]+x1, p[1]+y1
+            lms_lines.append(f"{x} {y}")
+        
+        current_lms_content = "\n".join(lms_lines) + "\n"
+
         with open(lms_path, "w") as f:
-            for p in pre_landmark:
-                x, y = p[0]+x1, p[1]+y1
-                f.write(str(x))
-                f.write(" ")
-                f.write(str(y))
-                f.write("\n")
+            f.write(current_lms_content)
+        
+        last_lms_content = current_lms_content
 
 if __name__ == "__main__":
     

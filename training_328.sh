@@ -1,4 +1,5 @@
 #! /bin/bash
+set -e
 # input: bash training_328.sh file_name cuda_id
 file_name=$1
 cuda_id=$2

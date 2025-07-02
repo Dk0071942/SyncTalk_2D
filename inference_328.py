@@ -68,8 +68,9 @@ img_idx = 0
 net = Model(6, mode).cuda()
 net.load_state_dict(torch.load(checkpoint))
 net.eval()
+print(f'frames to be processed: {audio_feats.shape[0]}')
 for i in tqdm(range(audio_feats.shape[0])):
-    if img_idx>len_img - 1:
+    if img_idx>len_img - 1 or img_idx>audio_feats.shape[0]/2:
         step_stride = -1
     if img_idx<1:
         step_stride = 1

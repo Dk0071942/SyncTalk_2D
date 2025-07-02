@@ -228,6 +228,7 @@ def cosine_loss(a, v, y):
     return loss
     
 def train(save_dir, dataset_dir, mode):
+    print(f'SyncNet training started...')
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
         
@@ -249,11 +250,12 @@ def train(save_dir, dataset_dir, mode):
             loss = cosine_loss(audio_embedding, face_embedding, y)
             loss.backward()
             optimizer.step()
-        print(epoch+1, loss.item())
+        print(f'SyncNet training epoch: {epoch+1}, loss: {loss.item()}')
         if loss.item() < best_loss:
             best_loss = loss.item()
             torch.save(model.state_dict(), os.path.join(save_dir, str(epoch+1)+'.pth'))
-            
+    print(f'SyncNet training finished...')
+
             
     
     

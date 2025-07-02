@@ -115,7 +115,8 @@ def train(net, epoch, batch_size, lr):
                 optimizer.step()
                 p.update(imgs.shape[0])
                 
-        if (e+1) % 5 == 0:
+        checkpoint_save_freq = 25
+        if (e+1) % checkpoint_save_freq == 0:
             torch.save(net.state_dict(), os.path.join(save_dir, str(e)+'.pth'))
         if args.see_res:
             net.eval()

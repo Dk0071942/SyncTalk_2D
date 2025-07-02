@@ -14,7 +14,7 @@ conda activate synctalk_2d
 ```
 ``` bash
 # install dependencies
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
 conda install -c conda-forge 'ffmpeg=4.3.*' x264  #very important
 pip install opencv-python transformers soundfile librosa==0.10.1 onnxruntime-gpu configargparse
 pip install numpy==1.23.5
