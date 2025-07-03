@@ -8,7 +8,8 @@ import tempfile
 import shutil
 from tqdm import tqdm
 
-from core_clips_manager import CoreClipsManager, CoreClip
+from core_clips_manager import CoreClipsManager
+from frame_based_structures import CoreClip
 from vad_torch import SileroVAD, AudioSegment
 from utils import get_audio_features
 from inference_module import SyncTalkInference
@@ -22,22 +23,31 @@ class EditDecisionItem:
                  start_time: float,
                  end_time: float,
                  clip: CoreClip,
-                 clip_start: float,
-                 clip_end: float,
-                 needs_lipsync: bool):
+                 clip_start_frame: int,
+                 clip_end_frame: int,
+                 padding_frames: int,
+                 needs_lipsync: bool,
+                 fps: int = 25):
         self.start_time = start_time  # In output timeline
         self.end_time = end_time
         self.clip = clip
-        self.clip_start = clip_start  # In source clip
-        self.clip_end = clip_end
+        self.clip_start_frame = clip_start_frame  # In source clip (frame number)
+        self.clip_end_frame = clip_end_frame  # In source clip (frame number)
+        self.padding_frames = padding_frames  # Number of frames to pad with last frame
         self.needs_lipsync = needs_lipsync
+        self.fps = fps
         
     @property
     def duration(self) -> float:
         return self.end_time - self.start_time
         
+    @property
+    def total_frames(self) -> int:
+        """Total number of frames including padding."""
+        return (self.clip_end_frame - self.clip_start_frame) + self.padding_frames
+        
     def __repr__(self):
-        return f"EDL({self.start_time:.2f}-{self.end_time:.2f}, {self.clip.clip_type}, lipsync={self.needs_lipsync})"
+        return f"EDL({self.start_time:.2f}-{self.end_time:.2f}, {self.clip.clip_type}, frames={self.clip_start_frame}-{self.clip_end_frame}, pad={self.padding_frames}, lipsync={self.needs_lipsync})"
 
 
 class CoreClipsProcessor:
@@ -100,18 +110,79 @@ class CoreClipsProcessor:
             # Merge short segments
             segments = self.vad.merge_short_segments(segments, min_duration=min_silence_duration)
             
+            # Merge consecutive segments of the same type
+            merged_segments = []
+            current_segment = None
+            
+            for segment in segments:
+                if current_segment is None:
+                    current_segment = segment
+                elif current_segment.label == segment.label:
+                    # Same type, merge them
+                    current_segment = AudioSegment(
+                        start_time=current_segment.start_time,
+                        end_time=segment.end_time,
+                        label=current_segment.label
+                    )
+                else:
+                    # Different type, save current and start new
+                    merged_segments.append(current_segment)
+                    current_segment = segment
+            
+            # Don't forget the last segment
+            if current_segment:
+                merged_segments.append(current_segment)
+            
+            segments = merged_segments
+            
             # Visualize if requested
             if visualize_vad:
                 vad_output = output_path.replace('.mp4', '_vad.png')
                 self.vad.visualize_vad(audio_path, segments, vad_output)
                 
-            print(f"VAD detected {len(segments)} segments in {audio_duration:.2f}s audio")
+            print(f"VAD detected {len(segments)} segments in {audio_duration:.2f}s audio (after merging same types)")
+            
+            # Print merged segments
+            print("\nMerged segments:")
+            for i, seg in enumerate(segments):
+                print(f"  {i}: {seg.start_time:.3f}s - {seg.end_time:.3f}s ({seg.duration:.3f}s) - {seg.label}")
             
             # Step 2: Create Edit Decision List (EDL)
             if progress_callback:
                 progress_callback(10, 100, "Creating edit decision list...")
                 
             edl = self._create_edit_decision_list(segments)
+            
+            # Print detailed EDL information
+            print("\n" + "="*80)
+            print("EDIT DECISION LIST (EDL)")
+            print("="*80)
+            total_frames_by_clip = {}
+            
+            for idx, item in enumerate(edl):
+                print(f"\nSegment {idx}:")
+                print(f"  Time: {item.start_time:.3f}s - {item.end_time:.3f}s (duration: {item.duration:.3f}s)")
+                print(f"  Type: {item.clip.clip_type} {'(with lip-sync)' if item.needs_lipsync else ''}")
+                print(f"  Clip: {item.clip.path}")
+                print(f"  Source frames: {item.clip_start_frame} - {item.clip_end_frame} ({item.clip_end_frame - item.clip_start_frame} frames)")
+                print(f"  Padding frames: {item.padding_frames}")
+                print(f"  Total output frames: {item.total_frames}")
+                
+                # Track total frames used from each clip
+                clip_name = item.clip.path
+                if clip_name not in total_frames_by_clip:
+                    total_frames_by_clip[clip_name] = 0
+                total_frames_by_clip[clip_name] += item.total_frames
+            
+            print("\n" + "-"*80)
+            print("TOTAL FRAMES USED FROM EACH CORE VIDEO:")
+            print("-"*80)
+            for clip_name, frame_count in sorted(total_frames_by_clip.items()):
+                print(f"  {clip_name}: {frame_count} frames ({frame_count/self.fps:.3f}s)")
+            
+            total_output_frames = sum(item.total_frames for item in edl)
+            print(f"\nTotal output frames: {total_output_frames} ({total_output_frames/self.fps:.3f}s)")
+            print("="*80 + "\n")
             
             # Step 3: Initialize SyncTalk model for lip-sync
             if progress_callback:
@@ -175,30 +246,36 @@ class CoreClipsProcessor:
         """
         edl = []
         
+        # Keep track of the global timeline position
+        global_time = 0.0
+        
         for segment in segments:
-            # Select clips for this segment
+            # Select clips for this segment using frame-based approach
             clip_selections = self.clips_manager.select_clips_for_segment(
                 segment.duration, 
-                "talk" if segment.label == "speech" else "silence"
+                "talk" if segment.label == "speech" else "silence",
+                fps=self.fps
             )
             
-            # Create EDL items
-            current_time = segment.start_time
-            
-            for clip, clip_start, clip_end in clip_selections:
-                duration = clip_end - clip_start
+            # Process each clip selection directly
+            for clip, start_frame, end_frame, padding_frames in clip_selections:
+                # Calculate duration based on total frames (including padding)
+                total_frames = (end_frame - start_frame) + padding_frames
+                duration = total_frames / self.fps
                 
                 edl_item = EditDecisionItem(
-                    start_time=current_time,
-                    end_time=current_time + duration,
+                    start_time=global_time,
+                    end_time=global_time + duration,
                     clip=clip,
-                    clip_start=clip_start,
-                    clip_end=clip_end,
-                    needs_lipsync=(segment.label == "speech")
+                    clip_start_frame=start_frame,
+                    clip_end_frame=end_frame,
+                    padding_frames=padding_frames,
+                    needs_lipsync=(segment.label == "speech"),
+                    fps=self.fps
                 )
                 
                 edl.append(edl_item)
-                current_time += duration
+                global_time += duration
                 
         return edl
         
@@ -207,6 +284,7 @@ class CoreClipsProcessor:
                          item_idx: int) -> str:
         """
         Process a single EDL item, applying lip-sync if needed.
+        Plays full clip first, then pads with last frame if needed.
         
         Args:
             edl_item: The EDL item to process
@@ -216,39 +294,70 @@ class CoreClipsProcessor:
         Returns:
             Path to the processed segment video
         """
+        print(f"\nProcessing EDL item {item_idx}:")
+        print(f"  Clip: {edl_item.clip.path}")
+        print(f"  Time range: {edl_item.start_time:.3f}s - {edl_item.end_time:.3f}s")
+        
         # Extract frames and landmarks for this clip
         frames_dir, landmarks_dir, num_frames = self.clips_manager.extract_frames_and_landmarks(edl_item.clip)
         
-        # Calculate frame range for this segment
-        start_frame = int(edl_item.clip_start * self.fps)
-        end_frame = int(edl_item.clip_end * self.fps)
-        
-        # Handle looping if segment is longer than clip
-        total_frames_needed = int(edl_item.duration * self.fps)
+        # Use frame-based information from EDL item
+        start_frame = edl_item.clip_start_frame
+        end_frame = edl_item.clip_end_frame
         clip_frames = end_frame - start_frame
+        total_frames_needed = edl_item.total_frames
+        
+        print(f"  Source frames: {start_frame} - {end_frame} ({clip_frames} frames)")
+        print(f"  Padding frames: {edl_item.padding_frames}")
+        print(f"  Total output frames: {total_frames_needed}")
         
         # Create output video for this segment
         segment_path = os.path.join(self.temp_dir, f"segment_{item_idx:04d}.mp4")
         
         # Get first frame to determine dimensions
-        first_frame = cv2.imread(os.path.join(frames_dir, f"{start_frame}.jpg"))
+        first_frame_path = os.path.join(frames_dir, f"{start_frame}.jpg")
+        if not os.path.exists(first_frame_path):
+            print(f"Warning: Frame {start_frame} not found, trying frame 0")
+            first_frame_path = os.path.join(frames_dir, "0.jpg")
+            
+        first_frame = cv2.imread(first_frame_path)
         h, w = first_frame.shape[:2]
         
         # Create video writer
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(segment_path, fourcc, self.fps, (w, h))
         
+        # Calculate the last frame index for padding
+        last_frame_idx = end_frame - 1
+        
+        # Track frame usage
+        frame_usage = []
+        
         # Process frames
         for i in range(total_frames_needed):
-            # Calculate which frame to use (with looping)
-            frame_idx = start_frame + (i % clip_frames)
+            if i < clip_frames:
+                # Play the clip normally
+                frame_idx = start_frame + i
+                frame_usage.append(f"{frame_idx}")
+            else:
+                # Pad with the last frame
+                frame_idx = last_frame_idx
+                frame_usage.append(f"{frame_idx}*")  # * indicates padding
             
             # Load frame and landmarks
             frame_path = os.path.join(frames_dir, f"{frame_idx}.jpg")
             lms_path = os.path.join(landmarks_dir, f"{frame_idx}.lms")
             
+            # Check if frame exists
+            if not os.path.exists(frame_path):
+                print(f"Warning: Frame {frame_idx} not found, using last valid frame")
+                frame_idx = min(frame_idx, num_frames - 1)
+                frame_path = os.path.join(frames_dir, f"{frame_idx}.jpg")
+                lms_path = os.path.join(landmarks_dir, f"{frame_idx}.lms")
+            
             img = cv2.imread(frame_path)
             
+            # Apply lip-sync if this is a speech segment
             if edl_item.needs_lipsync:
                 # Load landmarks
                 lms_list = []
@@ -260,7 +369,7 @@ class CoreClipsProcessor:
                         lms_list.append(arr)
                 lms = np.array(lms_list, dtype=np.int32)
                 
-                # Calculate audio feature index
+                # Calculate audio feature index based on output timeline
                 audio_frame_idx = int(edl_item.start_time * self.fps) + i
                 
                 # Get audio features for this frame
@@ -269,12 +378,17 @@ class CoreClipsProcessor:
                 # Apply lip-sync with blending
                 result_img = self._generate_frame_with_blending(img, audio_feat, lms)
             else:
-                # For silence, use frame as-is
+                # For silence or first pass (no audio_feats), use frame as-is
                 result_img = img
                 
             out.write(result_img)
             
         out.release()
+        
+        # Print frame usage summary
+        print(f"  Frame sequence: {frame_usage[0]} - {frame_usage[-1]}")
+        if edl_item.padding_frames > 0:
+            print(f"  Note: Last {edl_item.padding_frames} frames are padded (marked with *)")
         
         return segment_path
         
@@ -291,31 +405,10 @@ class CoreClipsProcessor:
         Returns:
             Image with blended lip-synced face
         """
-        try:
-            # First, generate the full frame using standard method
-            generated_full = self.sync_talk.generate_frame(img.copy(), audio_feat, lms, parsing=None)
-            
-            # Validate landmarks
-            if len(lms) != 68:
-                print(f"Warning: Expected 68 landmarks, got {len(lms)}. Using standard method.")
-                return generated_full
-                
-            # Create a smooth face mask
-            face_mask = create_face_mask(lms, img.shape, expansion_ratio=1.15)
-            
-            # Match colors between generated face and original
-            # This helps reduce color discontinuity
-            matched_generated = match_color_histogram(generated_full, img, face_mask)
-            
-            # Blend the generated face with original using smooth mask
-            result = blend_faces(img, matched_generated, lms, feather_amount=30)
-            
-            return result
-            
-        except Exception as e:
-            print(f"Warning: Face blending failed: {e}. Using standard method.")
-            # Fallback to standard method without blending
-            return self.sync_talk.generate_frame(img, audio_feat, lms, parsing=None)
+        # For now, use the standard method without blending since we have 110 landmarks
+        # The face blending utils were designed for 68 landmarks
+        # TODO: Adapt face blending to work with 110 landmarks
+        return self.sync_talk.generate_frame(img.copy(), audio_feat, lms, parsing=None)
         
     def _concatenate_segments(self, segment_paths: List[str], output_path: str):
         """
