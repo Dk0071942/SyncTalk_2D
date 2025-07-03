@@ -1,18 +1,29 @@
+"""
+Gradio web interface for SyncTalk 2D using refactored modules.
+
+This is the updated version that uses the new synctalk package structure.
+"""
+
 import gradio as gr
 import os
 from pathlib import Path
 import time
 import traceback
-from inference_module import SyncTalkInference, VideoProcessor
+
+# Import from refactored synctalk package
+from synctalk.processing import VideoProcessor, StandardVideoProcessor, CoreClipsProcessor
+from synctalk.config import get_default_config, apply_preset
 
 
 class SyncTalkGradio:
+    """Gradio application for SyncTalk 2D."""
+    
     def __init__(self):
         self.output_dir = Path("./gradio_outputs")
         self.output_dir.mkdir(exist_ok=True)
         
     def discover_models(self):
-        """Discover available models in the checkpoint directory"""
+        """Discover available models in the checkpoint directory."""
         checkpoint_dir = Path("./checkpoint")
         models = []
         
@@ -26,11 +37,31 @@ class SyncTalkGradio:
         
         return sorted(models)
     
-    def generate_video(self, model_name, audio_file, video_file=None, start_frame=0, asr_mode="ave", 
-                      loop_back=True, use_core_clips=False, vad_threshold=0.5, 
-                      min_silence_duration=0.75, visualize_vad=False, progress=gr.Progress()):
-        """Generate video using the new inference module with optional video template"""
+    def generate_video(self, model_name, audio_file, video_file=None, 
+                      start_frame=0, asr_mode="ave", loop_back=True, 
+                      use_core_clips=False, vad_threshold=0.5, 
+                      min_silence_duration=0.75, visualize_vad=False,
+                      quality_preset="default", progress=gr.Progress()):
+        """
+        Generate video using the refactored processors.
         
+        Args:
+            model_name: Selected model name
+            audio_file: Path to audio file
+            video_file: Optional video template
+            start_frame: Starting frame index
+            asr_mode: Audio encoder mode
+            loop_back: Whether to loop back
+            use_core_clips: Whether to use core clips mode
+            vad_threshold: VAD threshold
+            min_silence_duration: Minimum silence duration
+            visualize_vad: Whether to visualize VAD
+            quality_preset: Quality preset to apply
+            progress: Gradio progress tracker
+            
+        Returns:
+            Tuple of (video_path, status_message)
+        """
         try:
             # Validate inputs
             if not model_name:
@@ -40,23 +71,13 @@ class SyncTalkGradio:
                 return None, "Please upload an audio file"
             
             # Update progress
-            progress(0.1, desc="Initializing model...")
-            
-            # Initialize inference module
-            inference = SyncTalkInference(model_name)
-            
-            # Load models
-            progress(0.2, desc="Loading models...")
-            try:
-                checkpoint_file = inference.load_models(mode=asr_mode)
-                print(f"Loaded checkpoint: {checkpoint_file}")
-            except Exception as e:
-                return None, f"Failed to load model: {str(e)}"
+            progress(0.1, desc="Initializing...")
             
             # Generate output filename
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             audio_name = Path(audio_file).stem
-            output_filename = f"{model_name}_{audio_name}_{timestamp}.mp4"
+            mode_suffix = "core_clips" if use_core_clips else "standard"
+            output_filename = f"{model_name}_{audio_name}_{mode_suffix}_{timestamp}.mp4"
             output_path = self.output_dir / output_filename
             
             # Process uploaded video if provided
@@ -64,16 +85,15 @@ class SyncTalkGradio:
             custom_lms_dir = None
             video_processor = None
             
-            if video_file:
-                progress(0.25, desc="Processing uploaded video...")
+            if video_file and not use_core_clips:
+                progress(0.2, desc="Processing uploaded video...")
                 video_processor = VideoProcessor()
                 
                 try:
                     # Define progress callback for video processing
                     def video_progress_callback(current, total, message):
-                        # Scale progress from 0.25 to 0.3
                         if total > 0:
-                            scaled_progress = 0.25 + (current / total) * 0.05
+                            scaled_progress = 0.2 + (current / total) * 0.1
                             progress(scaled_progress, desc=message)
                     
                     custom_img_dir, custom_lms_dir, num_frames = video_processor.process_video(
@@ -86,29 +106,58 @@ class SyncTalkGradio:
                         video_processor.cleanup()
                     return None, f"Failed to process video: {str(e)}"
             
-            # Define progress callback for Gradio
-            def gradio_progress_callback(current, total, message):
-                # Scale progress from 0.3 to 0.95
+            # Define progress callback for main processing
+            def main_progress_callback(current, total, message):
                 if total > 0:
                     scaled_progress = 0.3 + (current / total) * 0.65
                     progress(scaled_progress, desc=message)
             
-            # Generate video
+            # Generate video based on mode
             progress(0.3, desc="Starting video generation...")
-            generated_path = inference.generate_video(
-                audio_path=audio_file,
-                output_path=str(output_path),
-                start_frame=start_frame if not video_file else 0,  # Start from 0 for custom videos
-                loop_back=loop_back,
-                use_parsing=False,  # Can be exposed as option later
-                custom_img_dir=custom_img_dir,
-                custom_lms_dir=custom_lms_dir,
-                use_core_clips=use_core_clips,
-                vad_threshold=vad_threshold,
-                min_silence_duration=min_silence_duration,
-                visualize_vad=visualize_vad,
-                progress_callback=gradio_progress_callback
-            )
+            
+            if use_core_clips:
+                # Use Core Clips Processor
+                processor = CoreClipsProcessor(model_name)
+                
+                # Get configuration
+                config = get_default_config(model_name)
+                if quality_preset != "default":
+                    apply_preset(config, quality_preset)
+                
+                # Load models
+                progress(0.35, desc="Loading models...")
+                generated_path = processor.generate_video(
+                    audio_path=audio_file,
+                    output_path=str(output_path),
+                    asr_mode=asr_mode,
+                    vad_threshold=vad_threshold,
+                    min_silence_duration=min_silence_duration,
+                    visualize_vad=visualize_vad,
+                    progress_callback=main_progress_callback
+                )
+            else:
+                # Use Standard Processor
+                processor = StandardVideoProcessor(model_name)
+                
+                # Get configuration
+                config = get_default_config(model_name)
+                if quality_preset != "default":
+                    apply_preset(config, quality_preset)
+                
+                # Load models
+                progress(0.35, desc="Loading models...")
+                processor.load_models(mode=asr_mode)
+                
+                generated_path = processor.generate_video(
+                    audio_path=audio_file,
+                    output_path=str(output_path),
+                    start_frame=start_frame if not video_file else 0,
+                    loop_back=loop_back,
+                    use_parsing=False,
+                    custom_img_dir=custom_img_dir,
+                    custom_lms_dir=custom_lms_dir,
+                    progress_callback=main_progress_callback
+                )
             
             # Cleanup video processor if used
             if video_processor:
@@ -119,7 +168,17 @@ class SyncTalkGradio:
             
             # Verify file exists
             if os.path.exists(generated_path):
-                return generated_path, "Video generated successfully!"
+                # Get file info
+                file_size = os.path.getsize(generated_path) / (1024 * 1024)  # MB
+                status_msg = f"Video generated successfully! Size: {file_size:.2f} MB"
+                
+                # Add VAD visualization note if applicable
+                if use_core_clips and visualize_vad:
+                    vad_path = generated_path.replace('.mp4', '_vad.png')
+                    if os.path.exists(vad_path):
+                        status_msg += f"\nVAD visualization saved: {os.path.basename(vad_path)}"
+                
+                return generated_path, status_msg
             else:
                 return None, f"Video generation completed but file not found at {generated_path}"
                 
@@ -130,7 +189,7 @@ class SyncTalkGradio:
 
 
 def create_interface():
-    """Create Gradio interface using the new inference module"""
+    """Create Gradio interface for SyncTalk 2D."""
     app = SyncTalkGradio()
     
     with gr.Blocks(title="SyncTalk 2D - Lip Sync Video Generator") as demo:
@@ -138,6 +197,12 @@ def create_interface():
         # SyncTalk 2D - Lip Sync Video Generator
         
         Generate high-quality lip-synced videos using trained SyncTalk 2D models.
+        
+        **New Features:**
+        - 🎯 Standard Mode: Uses training dataset frames
+        - 🎬 Core Clips Mode: Uses pre-recorded video segments with VAD
+        - 📹 Custom Video Support: Use your own video as template
+        - ⚡ Quality Presets: Optimize for quality or speed
         """)
         
         with gr.Row():
@@ -167,154 +232,128 @@ def create_interface():
                 
                 # Video input (optional)
                 video_input = gr.Video(
-                    label="Upload Video Template (Optional) - Leave empty to use model's default character"
+                    label="Upload Video Template (Optional) - Only for Standard Mode"
+                )
+                
+                # Mode selection
+                with gr.Group():
+                    use_core_clips = gr.Checkbox(
+                        value=False,
+                        label="Use Core Clips Mode",
+                        info="Use pre-recorded clips with VAD-based selection"
+                    )
+                
+                # Quality preset
+                quality_preset = gr.Radio(
+                    choices=["default", "high_quality", "fast", "low_memory"],
+                    value="default",
+                    label="Quality Preset"
                 )
                 
                 # Advanced options
                 with gr.Accordion("Advanced Options", open=False):
-                    start_frame = gr.Number(
-                        label="Start Frame",
-                        value=0,
-                        precision=0
-                    )
-                    
-                    asr_mode = gr.Radio(
-                        choices=["ave", "hubert", "wenet"],
-                        value="ave",
-                        label="Audio Encoder"
-                    )
-                    
-                    loop_back = gr.Checkbox(
-                        value=True,
-                        label="Loop back to start frame"
-                    )
-                    
-                    # Core clips options
-                    with gr.Group():
-                        use_core_clips = gr.Checkbox(
-                            value=False,
-                            label="Use Core Clips Mode",
-                            info="Use pre-recorded clips instead of training dataset"
+                    with gr.Tab("Standard Mode"):
+                        start_frame = gr.Number(
+                            label="Start Frame",
+                            value=0,
+                            precision=0
                         )
                         
-                        with gr.Row():
-                            vad_threshold = gr.Slider(
-                                minimum=0.1,
-                                maximum=0.9,
-                                value=0.5,
-                                step=0.1,
-                                label="VAD Threshold",
-                                info="Speech detection sensitivity"
-                            )
-                            
-                            min_silence_duration = gr.Slider(
-                                minimum=0.1,
-                                maximum=2.0,
-                                value=0.75,
-                                step=0.05,
-                                label="Min Silence Duration (s)",
-                                info="Minimum duration to keep as silence"
-                            )
+                        loop_back = gr.Checkbox(
+                            value=True,
+                            label="Loop back to start frame"
+                        )
+                    
+                    with gr.Tab("Core Clips Mode"):
+                        vad_threshold = gr.Slider(
+                            minimum=0.1,
+                            maximum=0.9,
+                            step=0.1,
+                            value=0.5,
+                            label="VAD Threshold",
+                            info="Lower = more sensitive"
+                        )
+                        
+                        min_silence_duration = gr.Slider(
+                            minimum=0.1,
+                            maximum=2.0,
+                            step=0.1,
+                            value=0.75,
+                            label="Minimum Silence Duration (seconds)"
+                        )
                         
                         visualize_vad = gr.Checkbox(
                             value=False,
                             label="Save VAD Visualization",
-                            info="Save a plot showing speech/silence detection"
+                            info="Creates a plot showing speech/silence detection"
+                        )
+                    
+                    with gr.Tab("Audio Settings"):
+                        asr_mode = gr.Radio(
+                            choices=["ave", "hubert", "wenet"],
+                            value="ave",
+                            label="Audio Encoder"
                         )
                 
                 # Generate button
                 generate_btn = gr.Button("🎬 Generate Video", variant="primary", size="lg")
                 
+                # Status output
+                status_output = gr.Textbox(label="Status", lines=3)
+            
             with gr.Column(scale=2):
-                # Output video
-                output_video = gr.Video(
-                    label="Generated Video",
-                    autoplay=True
-                )
+                # Video output
+                video_output = gr.Video(label="Generated Video")
                 
-                # Status message
-                status_text = gr.Textbox(
-                    label="Status",
-                    interactive=False,
-                    max_lines=3
-                )
-        
-        # Examples
-        if available_models:
-            gr.Markdown("## Examples")
-            # Check for demo audio files
-            demo_files = []
-            if os.path.exists("demo/talk_hb.wav"):
-                demo_files.append("demo/talk_hb.wav")
-            if os.path.exists("pause_audio_test_23s.wav"):
-                demo_files.append("pause_audio_test_23s.wav")
-            
-            # Filter examples to only include available models
-            example_list = []
-            for model in ["LS1", "AD2.2"]:
-                if model in available_models and demo_files:
-                    # Add example with None for video_input and default values for new params
-                    example_list.append([model, demo_files[0], None, 0, "ave", True, False, 0.5, 0.75, False])
-            
-            if example_list:
+                # Examples
                 gr.Examples(
-                    examples=example_list,
-                    inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, 
-                           loop_back, use_core_clips, vad_threshold, min_silence_duration, visualize_vad],
-                    outputs=[output_video, status_text],
+                    examples=[
+                        ["LS1", "examples/audio1.wav", None, 0, "ave", True, False, 0.5, 0.75, False, "default"],
+                        ["AD2.2", "examples/audio2.wav", None, 0, "ave", True, True, 0.5, 0.75, True, "default"],
+                    ],
+                    inputs=[model_dropdown, audio_input, video_input, start_frame, 
+                           asr_mode, loop_back, use_core_clips, vad_threshold, 
+                           min_silence_duration, visualize_vad, quality_preset],
+                    outputs=[video_output, status_output],
                     fn=app.generate_video,
                     cache_examples=False
                 )
         
-        # Instructions
-        gr.Markdown("""
-        ## Instructions
-        
-        1. **Select a Model**: Choose from the available trained models in the dropdown
-        2. **Upload Audio**: Upload a WAV audio file (clear speech works best)
-        3. **Upload Video** (Optional): Upload a video to use as template character
-           - Leave empty to use the model's default character
-           - Upload any video with a clear face to use that person as template
-        4. **Configure Options** (Optional): Adjust advanced settings if needed
-        5. **Generate**: Click the Generate Video button and wait for processing
-        6. **Download**: Right-click on the video to save it
-        
-        ## Notes
-        
-        - Video generation typically takes 1-3 minutes depending on audio length
-        - When uploading a video template, ensure the face is clearly visible
-        - Videos will be automatically converted to 25fps if needed
-        - The model works best with the same language it was trained on
-        - Generated videos are saved in the `gradio_outputs` folder
-        - Enable "Loop back to start frame" for seamless video loops
-        
-        ## Core Clips Mode
-        
-        - Enable "Use Core Clips Mode" to use pre-recorded body movements
-        - This mode uses Voice Activity Detection to select appropriate clips
-        - Talking clips are used during speech, silence clips during pauses
-        - Adjust VAD Threshold to fine-tune speech detection sensitivity
-        - Lower Min Silence Duration to make transitions more responsive
-        """)
-        
-        # Set up event
+        # Wire up the interface
         generate_btn.click(
             fn=app.generate_video,
-            inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, 
-                   loop_back, use_core_clips, vad_threshold, min_silence_duration, visualize_vad],
-            outputs=[output_video, status_text]
+            inputs=[
+                model_dropdown, audio_input, video_input, start_frame,
+                asr_mode, loop_back, use_core_clips, vad_threshold,
+                min_silence_duration, visualize_vad, quality_preset
+            ],
+            outputs=[video_output, status_output]
+        )
+        
+        # Update UI based on mode selection
+        def update_ui_for_mode(use_core_clips):
+            return {
+                video_input: gr.update(visible=not use_core_clips),
+                start_frame: gr.update(visible=not use_core_clips),
+                loop_back: gr.update(visible=not use_core_clips),
+                vad_threshold: gr.update(visible=use_core_clips),
+                min_silence_duration: gr.update(visible=use_core_clips),
+                visualize_vad: gr.update(visible=use_core_clips)
+            }
+        
+        use_core_clips.change(
+            fn=update_ui_for_mode,
+            inputs=[use_core_clips],
+            outputs=[video_input, start_frame, loop_back, 
+                    vad_threshold, min_silence_duration, visualize_vad]
         )
     
     return demo
 
 
 if __name__ == "__main__":
-    # Create output directory
-    Path("./gradio_outputs").mkdir(exist_ok=True)
-    
-    # Launch the app
     demo = create_interface()
-    demo.queue().launch(
+    demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
         share=False,

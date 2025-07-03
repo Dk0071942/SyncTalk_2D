@@ -22,10 +22,12 @@ from ..core.structures import EditDecisionItem
 from ..core.clips_manager import CoreClipsManager
 from ..utils.face_blending import blend_faces, create_face_mask
 
-# Import SyncTalk inference temporarily (will be replaced by StandardVideoProcessor)
+from .standard_processor import StandardVideoProcessor
+
+# Import from root directory
 import sys
-sys.path.append('.')
-from inference_module import SyncTalkInference
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from utils import get_audio_features
 
 
@@ -54,7 +56,7 @@ class CoreClipsProcessor:
         # Initialize components
         self.clips_manager = CoreClipsManager(model_name)
         self.vad = SileroVAD()
-        self.sync_talk: Optional[SyncTalkInference] = None
+        self.sync_talk: Optional[StandardVideoProcessor] = None
         
         # Configuration
         self.fps = 25
@@ -224,7 +226,7 @@ class CoreClipsProcessor:
             audio_feat = get_audio_features(audio_feats, audio_frame_idx).numpy()
             
             # Generate lip-synced frame
-            result_img = self.sync_talk.generate_frame(img.copy(), audio_feat, lms, parsing=None)
+            result_img = self.sync_talk._generate_single_frame(img.copy(), audio_feat, lms, parsing=None)
             
             writer.write(result_img)
         
@@ -373,11 +375,11 @@ class CoreClipsProcessor:
             if progress_callback:
                 progress_callback(20, 100, "Loading lip-sync model...")
             
-            self.sync_talk = SyncTalkInference(self.model_name, str(self.device))
+            self.sync_talk = StandardVideoProcessor(self.model_name, str(self.device))
             self.sync_talk.load_models(mode=asr_mode)
             
             # Process audio features
-            audio_feats = self.sync_talk.process_audio(audio_path)
+            audio_feats = self.sync_talk._prepare_audio_features(audio_path)
             
             # Step 4: Process each EDL item
             if progress_callback:
