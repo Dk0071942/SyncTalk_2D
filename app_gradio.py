@@ -27,7 +27,8 @@ class SyncTalkGradio:
         return sorted(models)
     
     def generate_video(self, model_name, audio_file, video_file=None, start_frame=0, asr_mode="ave", 
-                      loop_back=True, progress=gr.Progress()):
+                      loop_back=True, use_core_clips=False, vad_threshold=0.5, 
+                      min_silence_duration=0.75, visualize_vad=False, progress=gr.Progress()):
         """Generate video using the new inference module with optional video template"""
         
         try:
@@ -102,6 +103,10 @@ class SyncTalkGradio:
                 use_parsing=False,  # Can be exposed as option later
                 custom_img_dir=custom_img_dir,
                 custom_lms_dir=custom_lms_dir,
+                use_core_clips=use_core_clips,
+                vad_threshold=vad_threshold,
+                min_silence_duration=min_silence_duration,
+                visualize_vad=visualize_vad,
                 progress_callback=gradio_progress_callback
             )
             
@@ -183,6 +188,39 @@ def create_interface():
                         value=True,
                         label="Loop back to start frame"
                     )
+                    
+                    # Core clips options
+                    with gr.Group():
+                        use_core_clips = gr.Checkbox(
+                            value=False,
+                            label="Use Core Clips Mode",
+                            info="Use pre-recorded clips instead of training dataset"
+                        )
+                        
+                        with gr.Row():
+                            vad_threshold = gr.Slider(
+                                minimum=0.1,
+                                maximum=0.9,
+                                value=0.5,
+                                step=0.1,
+                                label="VAD Threshold",
+                                info="Speech detection sensitivity"
+                            )
+                            
+                            min_silence_duration = gr.Slider(
+                                minimum=0.1,
+                                maximum=2.0,
+                                value=0.75,
+                                step=0.05,
+                                label="Min Silence Duration (s)",
+                                info="Minimum duration to keep as silence"
+                            )
+                        
+                        visualize_vad = gr.Checkbox(
+                            value=False,
+                            label="Save VAD Visualization",
+                            info="Save a plot showing speech/silence detection"
+                        )
                 
                 # Generate button
                 generate_btn = gr.Button("🎬 Generate Video", variant="primary", size="lg")
@@ -215,13 +253,14 @@ def create_interface():
             example_list = []
             for model in ["LS1", "AD2.2"]:
                 if model in available_models and demo_files:
-                    # Add example with None for video_input
-                    example_list.append([model, demo_files[0], None, 0, "ave", True])
+                    # Add example with None for video_input and default values for new params
+                    example_list.append([model, demo_files[0], None, 0, "ave", True, False, 0.5, 0.75, False])
             
             if example_list:
                 gr.Examples(
                     examples=example_list,
-                    inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, loop_back],
+                    inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, 
+                           loop_back, use_core_clips, vad_threshold, min_silence_duration, visualize_vad],
                     outputs=[output_video, status_text],
                     fn=app.generate_video,
                     cache_examples=False
@@ -248,12 +287,21 @@ def create_interface():
         - The model works best with the same language it was trained on
         - Generated videos are saved in the `gradio_outputs` folder
         - Enable "Loop back to start frame" for seamless video loops
+        
+        ## Core Clips Mode
+        
+        - Enable "Use Core Clips Mode" to use pre-recorded body movements
+        - This mode uses Voice Activity Detection to select appropriate clips
+        - Talking clips are used during speech, silence clips during pauses
+        - Adjust VAD Threshold to fine-tune speech detection sensitivity
+        - Lower Min Silence Duration to make transitions more responsive
         """)
         
         # Set up event
         generate_btn.click(
             fn=app.generate_video,
-            inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, loop_back],
+            inputs=[model_dropdown, audio_input, video_input, start_frame, asr_mode, 
+                   loop_back, use_core_clips, vad_threshold, min_silence_duration, visualize_vad],
             outputs=[output_video, status_text]
         )
     

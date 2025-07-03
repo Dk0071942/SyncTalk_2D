@@ -371,6 +371,10 @@ class SyncTalkInference:
                       use_parsing: bool = False,
                       custom_img_dir: Optional[str] = None,
                       custom_lms_dir: Optional[str] = None,
+                      use_core_clips: bool = False,
+                      vad_threshold: float = 0.5,
+                      min_silence_duration: float = 0.75,
+                      visualize_vad: bool = False,
                       progress_callback: Optional[Callable[[int, int, str], None]] = None) -> str:
         """
         Generate a complete video from audio.
@@ -383,12 +387,32 @@ class SyncTalkInference:
             use_parsing: Whether to use parsing masks
             custom_img_dir: Optional custom directory with frames (overrides model dataset)
             custom_lms_dir: Optional custom directory with landmarks (overrides model dataset)
+            use_core_clips: Whether to use core clips mode instead of dataset frames
+            vad_threshold: VAD threshold for speech detection (core clips mode)
+            min_silence_duration: Minimum silence duration (core clips mode)
+            visualize_vad: Whether to save VAD visualization (core clips mode)
             progress_callback: Optional callback for progress updates
                               Called with (current_frame, total_frames, message)
                               
         Returns:
             Path to the generated video file
         """
+        # Use core clips mode if enabled
+        if use_core_clips:
+            from core_clips_processor import CoreClipsProcessor
+            
+            processor = CoreClipsProcessor(self.model_name, str(self.device))
+            return processor.generate_video(
+                audio_path=audio_path,
+                output_path=output_path,
+                asr_mode=self.mode,
+                vad_threshold=vad_threshold,
+                min_silence_duration=min_silence_duration,
+                visualize_vad=visualize_vad,
+                progress_callback=progress_callback
+            )
+        
+        # Original processing mode
         # Process audio
         if progress_callback:
             progress_callback(0, 100, "Processing audio...")
@@ -497,7 +521,7 @@ class SyncTalkInference:
     
     def run_cli(self, audio_path: str, start_frame: int = 0, 
                 loop_back: bool = True, use_parsing: bool = False, 
-                asr_mode: str = "ave") -> str:
+                asr_mode: str = "ave", use_core_clips: bool = False) -> str:
         """
         Run inference in CLI mode with tqdm progress bar.
         
@@ -507,6 +531,7 @@ class SyncTalkInference:
             loop_back: Whether to loop back
             use_parsing: Whether to use parsing
             asr_mode: Audio encoder mode
+            use_core_clips: Whether to use core clips mode
             
         Returns:
             Path to generated video
@@ -540,5 +565,6 @@ class SyncTalkInference:
             start_frame=start_frame,
             loop_back=loop_back,
             use_parsing=use_parsing,
+            use_core_clips=use_core_clips,
             progress_callback=tqdm_callback
         )

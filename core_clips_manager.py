@@ -43,7 +43,11 @@ class CoreClipsManager:
         
     def _parse_duration_from_filename(self, filename: str) -> float:
         """
-        Parse duration from filename like "02,08s talk.mp4" -> 2.08 seconds.
+        Parse duration from filename.
+        Handles patterns like:
+        - "02,08s talk.mp4" -> 2.08 seconds
+        - "AD2_talk_4s.mp4" -> 4.0 seconds
+        - "AD2_silence_2s.mp4" -> 2.0 seconds
         
         Args:
             filename: Filename to parse
@@ -57,6 +61,12 @@ class CoreClipsManager:
             seconds = int(match.group(1))
             centiseconds = int(match.group(2))
             return seconds + centiseconds / 100.0
+            
+        # Try to match patterns like "_4s" or "_2s"
+        match = re.search(r'_(\d+)s', filename)
+        if match:
+            return float(match.group(1))
+            
         return 0.0
         
     def _load_clips(self):
@@ -77,13 +87,31 @@ class CoreClipsManager:
                 
             # Parse duration
             duration = self._parse_duration_from_filename(filename)
-            if duration == 0 and clip_type == "silence":
-                # For silence clips without duration in name, we'll get it from the video
-                cap = cv2.VideoCapture(str(video_file))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                duration = frame_count / fps if fps > 0 else 0
-                cap.release()
+            
+            # If duration not found in filename, get it from preprocessed data or video
+            if duration == 0:
+                # Try to get duration from preprocessed info file
+                clip_name = video_file.stem
+                info_file = self.preprocessed_dir / clip_name / "info.txt"
+                
+                if info_file.exists():
+                    with open(info_file, 'r') as f:
+                        for line in f:
+                            if line.startswith("Duration:"):
+                                duration = float(line.split(":")[1].strip().rstrip('s'))
+                                break
+                
+                # If still no duration, get it from video file
+                if duration == 0:
+                    cap = cv2.VideoCapture(str(video_file))
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    duration = frame_count / fps if fps > 0 else 0
+                    cap.release()
+                    
+                    if duration == 0:
+                        print(f"Warning: Could not determine duration for {video_file.name}")
+                        continue  # Skip clips with no duration
                 
             clip = CoreClip(str(video_file), clip_type, duration)
             
@@ -114,6 +142,11 @@ class CoreClipsManager:
         if not clips:
             raise ValueError(f"No {clip_type} clips available")
             
+        # Filter out clips with invalid duration
+        valid_clips = [c for c in clips if c.duration > 0]
+        if not valid_clips:
+            raise ValueError(f"No valid {clip_type} clips with duration > 0")
+            
         selected = []
         remaining_duration = duration
         
@@ -124,13 +157,16 @@ class CoreClipsManager:
         # TODO: Implement more sophisticated selection based on speech patterns
         
         # Select the longest clip that's not too much longer than needed
-        best_clip = clips[-1]  # Default to longest
-        for clip in clips:
+        best_clip = valid_clips[-1]  # Default to longest
+        for clip in valid_clips:
             if clip.duration >= remaining_duration * 0.8:  # 80% threshold
                 best_clip = clip
                 break
                 
         # Calculate how many loops we need
+        if best_clip.duration <= 0:
+            raise ValueError(f"Selected clip has invalid duration: {best_clip}")
+            
         num_loops = int(np.ceil(remaining_duration / best_clip.duration))
         
         for i in range(num_loops):
