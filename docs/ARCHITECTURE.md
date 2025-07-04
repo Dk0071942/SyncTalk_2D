@@ -179,7 +179,7 @@ for each audio frame:
 
 **Single Video Generation:**
 ```bash
-python inference_328.py --name <model_name> --audio_path <audio.wav>
+python scripts/inference_cli.py --name <model_name> --audio_path <audio.wav>
 ```
 
 **Batch Processing:**

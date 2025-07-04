@@ -9,6 +9,7 @@ This document describes the refactored architecture of SyncTalk 2D, which provid
 ```
 synctalk/
 ├── __init__.py              # Main package exports
+├── README.md                # Package documentation
 ├── config.py                # Configuration management
 ├── processing/              # Video processing modules
 │   ├── __init__.py
@@ -20,10 +21,18 @@ synctalk/
 │   ├── __init__.py
 │   ├── vad.py              # Voice Activity Detection
 │   ├── structures.py       # Data structures
-│   └── clips_manager.py    # Core clips management
+│   ├── clips_manager.py    # Core clips management
+│   ├── syncnet.py          # SyncNet model (256x256)
+│   ├── syncnet_328.py      # SyncNet model (328x328)
+│   ├── unet.py             # U-Net model (256x256)
+│   ├── unet_328.py         # U-Net model (328x328)
+│   ├── datasetsss.py       # Dataset loader (256x256)
+│   ├── datasetsss_328.py   # Dataset loader (328x328)
+│   └── utils.py            # Core utility functions
 └── utils/                   # Utility functions
     ├── __init__.py
-    └── face_blending.py    # Face blending utilities
+    ├── face_blending.py    # Face blending utilities
+    └── video_processor.py  # Unified video processing utilities
 ```
 
 ## Key Components
@@ -68,6 +77,24 @@ synctalk/
 - Intelligent clip selection algorithms
 - Metadata caching for improved performance
 
+#### Model Components
+- **SyncNet Models** (`syncnet.py`, `syncnet_328.py`)
+  - Audio-visual synchronization network
+  - Evaluates lip-sync quality during training
+  - Supports both 256x256 and 328x328 resolutions
+  
+- **U-Net Models** (`unet.py`, `unet_328.py`)
+  - Main generation model using U-Net architecture
+  - MobileNet-inspired encoder/decoder blocks
+  - Audio feature integration for lip-sync
+  - Supports 256x256 and 328x328 resolutions
+
+#### Dataset Loaders (`datasetsss.py`, `datasetsss_328.py`)
+- Custom PyTorch dataset classes
+- Handle frame loading, landmark processing
+- Audio feature extraction and alignment
+- Support for multiple audio encoders (AVE, Hubert, WaveNet)
+
 ### 3. Configuration System
 
 #### Configuration Management (`config.py`)
@@ -92,6 +119,12 @@ SyncTalkConfig
 - Color histogram matching
 - Landmark alignment utilities
 - Improved documentation and type hints
+
+#### Video Processing (`utils/video_processor.py`)
+- Unified video processing pipeline
+- Frame extraction and preprocessing
+- Landmark detection integration
+- Audio feature extraction coordination
 
 ## Processing Workflows
 
@@ -153,9 +186,9 @@ python run_synctalk.py info --name MODEL
 python run_synctalk.py list
 ```
 
-#### Direct Inference (`inference_refactored.py`)
+#### Direct Inference (`scripts/inference_cli.py`)
 ```bash
-python inference_refactored.py \
+python scripts/inference_cli.py \
     --name MODEL \
     --audio_path audio.wav \
     --mode core_clips \
@@ -164,7 +197,7 @@ python inference_refactored.py \
 
 ### Web Interface
 
-#### Gradio Application (`app_gradio_refactored.py`)
+#### Gradio Application (`app_gradio.py`)
 - Modern UI with mode-specific options
 - Quality preset support
 - Real-time progress tracking
@@ -206,8 +239,8 @@ python inference_refactored.py \
 
 ### For Users
 
-1. **CLI Usage**: Use `run_synctalk.py` or `inference_refactored.py`
-2. **Web Interface**: Run `app_gradio_refactored.py`
+1. **CLI Usage**: Use `run_synctalk.py` or `scripts/inference_cli.py`
+2. **Web Interface**: Run `app_gradio.py`
 3. **API Changes**: The refactored code maintains backward compatibility
 
 ### For Developers

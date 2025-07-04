@@ -5,15 +5,14 @@ Creates a dataset-like structure for each core clip.
 """
 
 import os
-import cv2
 import argparse
 from pathlib import Path
 from tqdm import tqdm
-import shutil
 import sys
-sys.path.append('./data_utils')
 
-from data_utils.get_landmark import Landmark
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from synctalk.utils.video_processor import UnifiedVideoProcessor
 
 
 class CoreClipsPreprocessor:
@@ -29,13 +28,7 @@ class CoreClipsPreprocessor:
         self.model_name = model_name
         self.core_clips_dir = Path("./core_clips")
         self.dataset_dir = Path("./dataset")
-        self.landmark_detector = None
-        
-    def _init_landmark_detector(self):
-        """Initialize landmark detector lazily."""
-        if self.landmark_detector is None:
-            print("Initializing landmark detector...")
-            self.landmark_detector = Landmark()
+        self.video_processor = UnifiedVideoProcessor()
             
     def process_all_models(self):
         """Process core clips for all available models."""
@@ -75,7 +68,7 @@ class CoreClipsPreprocessor:
         print(f"Found {len(video_files)} video files for {model_name}")
         
         # Process each video
-        for video_file in tqdm(video_files, desc=f"Processing {model_name} clips"):
+        for video_file in tqdm(video_files, desc=f"Processing {model_name} clips", leave=False, position=0, ncols=100):
             self.process_video(video_file, model_dataset_dir)
             
     def process_video(self, video_path: Path, output_base_dir: Path):
@@ -104,105 +97,48 @@ class CoreClipsPreprocessor:
                 print(f"  Found {len(existing_frames)} frames and {len(existing_landmarks)} landmarks")
                 return
                 
-        # Create directories
-        full_body_dir.mkdir(parents=True, exist_ok=True)
-        landmarks_dir.mkdir(parents=True, exist_ok=True)
+        # Create clip directory
+        clip_dir.mkdir(parents=True, exist_ok=True)
         
         print(f"\nProcessing: {clip_name}")
         
-        # Extract frames
-        cap = cv2.VideoCapture(str(video_path))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # Use unified processor - extract frames without audio
+        frames_dir = str(full_body_dir)
+        num_frames = self.video_processor.extract_frames(
+            str(video_path), 
+            frames_dir,
+            convert_to_25fps=True
+        )
         
-        print(f"  Video info: {fps}fps, {total_frames} frames")
-        
-        # Check if we need to convert to 25fps
-        temp_video = None
-        if abs(fps - 25.0) > 0.1:
-            print(f"  Converting from {fps}fps to 25fps...")
-            temp_video = clip_dir / "temp_25fps.mp4"
-            cmd = f'ffmpeg -y -v error -i "{video_path}" -vf "fps=25" -c:v libx264 "{temp_video}"'
-            os.system(cmd)
-            cap.release()
-            cap = cv2.VideoCapture(str(temp_video))
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if num_frames == 0:
+            print(f"  ERROR: No frames extracted from {clip_name}")
+            return
             
-        # Extract frames
-        frame_count = 0
-        frames_extracted = []
+        print(f"  Extracted {num_frames} frames")
         
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-                
-            frame_path = full_body_dir / f"{frame_count}.jpg"
-            cv2.imwrite(str(frame_path), frame)
-            frames_extracted.append(frame_path)
-            frame_count += 1
+        # Detect landmarks using unified processor
+        landmarks_dir_str = str(landmarks_dir)
+        success = self.video_processor.detect_landmarks(
+            frames_dir,
+            landmarks_dir_str
+        )
+        
+        if not success:
+            print(f"  ERROR: Failed to detect landmarks for {clip_name}")
+            return
             
-        cap.release()
-        
-        # Remove temp video if created
-        if temp_video and temp_video.exists():
-            os.remove(temp_video)
-            
-        print(f"  Extracted {frame_count} frames")
-        
-        # Detect landmarks
-        self._init_landmark_detector()
-        
-        successful_detections = 0
-        last_valid_landmarks = None
-        
-        for i in tqdm(range(frame_count), desc="  Detecting landmarks", leave=False):
-            frame_path = full_body_dir / f"{i}.jpg"
-            lms_path = landmarks_dir / f"{i}.lms"
-            
-            try:
-                # Detect landmarks
-                pre_landmark, x1, y1 = self.landmark_detector.detect(str(frame_path))
-                
-                if pre_landmark is not None:
-                    # Save landmarks
-                    lms_lines = []
-                    for p in pre_landmark:
-                        x, y = p[0] + x1, p[1] + y1
-                        lms_lines.append(f"{x} {y}")
-                    
-                    landmarks_content = "\n".join(lms_lines) + "\n"
-                    with open(lms_path, "w") as f:
-                        f.write(landmarks_content)
-                    
-                    last_valid_landmarks = landmarks_content
-                    successful_detections += 1
-                else:
-                    # Use last valid landmarks if available
-                    if last_valid_landmarks:
-                        with open(lms_path, "w") as f:
-                            f.write(last_valid_landmarks)
-                    else:
-                        print(f"\n  Warning: No landmarks detected for frame {i}")
-                        
-            except Exception as e:
-                print(f"\n  Error detecting landmarks for frame {i}: {e}")
-                # Use last valid landmarks if available
-                if last_valid_landmarks:
-                    with open(lms_path, "w") as f:
-                        f.write(last_valid_landmarks)
-                        
-        print(f"  Successfully detected landmarks in {successful_detections}/{frame_count} frames")
+        # Count successful detections for info file
+        landmarks_files = list(landmarks_dir.glob("*.lms"))
+        successful_detections = len(landmarks_files)
         
         # Create info file
         info_path = clip_dir / "info.txt"
         with open(info_path, "w") as f:
             f.write(f"Source: {video_path.name}\n")
             f.write(f"FPS: 25\n")
-            f.write(f"Frames: {frame_count}\n")
-            f.write(f"Duration: {frame_count / 25.0:.2f}s\n")
-            f.write(f"Original FPS: {fps}\n")
-            f.write(f"Landmarks detected: {successful_detections}/{frame_count}\n")
+            f.write(f"Frames: {num_frames}\n")
+            f.write(f"Duration: {num_frames / 25.0:.2f}s\n")
+            f.write(f"Landmarks detected: {successful_detections}/{num_frames}\n")
             
         print(f"  Saved info to {info_path}")
         

@@ -116,12 +116,14 @@ Then open http://localhost:7860 in your browser.
    - If OOM (Out of Memory) occurs, try reducing the batch_size in the training script
    - Windows users: Ensure CUDA toolkit is properly installed and NVIDIA GPU drivers are up to date
    - Windows paths: Use forward slashes (/) or escaped backslashes (\\) in paths
+   - **NEW**: Training now automatically resumes from interruptions using `.training_state.json`
+   - **NEW**: SyncNet training is automatically skipped if already completed
 
 ## Inference
 
 ### Command Line
 ```bash
-python inference_328.py --name <model_name> --audio_path <audio.wav>
+python scripts/inference_cli.py --name <model_name> --audio_path <audio.wav>
 ```
 
 ### Batch Processing
@@ -142,12 +144,14 @@ Use the Gradio interface for an easier experience with model selection and real-
 ```
 SyncTalk_2D/
 ├── app_gradio.py       # Web interface
-├── train_328.py        # Training script (328x328)
-├── inference_328.py    # Inference script (328x328)
-├── syncnet_328.py      # SyncNet for audio-visual sync
-├── unet_328.py         # U-Net model architecture
-├── datasetsss_328.py   # Dataset loader
-├── utils.py            # Utility functions
+├── run_synctalk.py     # Unified inference interface
+├── synctalk/           # Core package
+│   ├── core/           # Model implementations
+│   └── utils/          # Utilities
+├── scripts/            # Training and inference scripts
+│   ├── train_328.py    # Training script (328x328)
+│   ├── inference_cli.py # Command-line inference
+│   └── preprocess_data.py # Data preprocessing
 ├── data_utils/         # Data preprocessing tools
 ├── checkpoint/         # Trained model checkpoints
 ├── dataset/            # Training data

@@ -14,10 +14,10 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import List, Optional, Callable, Dict, Tuple
-from tqdm import tqdm
-
 # Import core components from synctalk package
 from ..core.vad import SileroVAD, AudioSegment
+from ..utils.ffmpeg_utils import FFmpegConfig, concat_videos, merge_audio_video
+from ..utils.progress import ProgressBar
 from ..core.structures import EditDecisionItem
 from ..core.clips_manager import CoreClipsManager
 from ..utils.face_blending import blend_faces, create_face_mask
@@ -296,29 +296,26 @@ class CoreClipsProcessor:
             for path in segment_paths:
                 f.write(f"file '{path}'\n")
         
-        # Concatenate segments
+        # Concatenate segments using standardized encoding
         temp_video = os.path.join(self.temp_dir, "concatenated.mp4")
-        concat_cmd = [
-            'ffmpeg', '-y', '-v', 'error',
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', concat_file,
-            '-c', 'copy',
-            temp_video
-        ]
-        subprocess.run(concat_cmd, check=True)
         
-        # Add audio
-        final_cmd = [
-            'ffmpeg', '-y', '-v', 'error',
-            '-i', temp_video,
-            '-i', audio_path,
-            '-c:v', 'copy',
-            '-c:a', 'aac',
-            '-shortest',
-            output_path
-        ]
-        subprocess.run(final_cmd, check=True)
+        # Get list of video files from concat file
+        video_files = []
+        with open(concat_file, 'r') as f:
+            for line in f:
+                if line.strip().startswith("file '"):
+                    video_path = line.strip()[6:-1]  # Remove "file '" and trailing "'"
+                    video_files.append(video_path)
+        
+        # Use standardized concat function
+        result = concat_videos(video_files, temp_video, re_encode=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to concatenate videos: {result.stderr}")
+        
+        # Add audio using standardized parameters
+        result = merge_audio_video(temp_video, audio_path, output_path)
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to merge audio: {result.stderr}")
     
     def generate_video(self, audio_path: str, output_path: str,
                       asr_mode: str = "ave",
@@ -463,10 +460,12 @@ class CoreClipsProcessor:
         def tqdm_callback(current, total, message):
             nonlocal pbar
             if pbar is None:
-                pbar = tqdm(total=total, desc="Generating video")
-            pbar.update(current - pbar.n)
-            pbar.set_description(message)
-            if current >= total and pbar is not None:
+                pbar = ProgressBar(total=total, desc="Generating video", leave=False)
+            # Calculate actual progress increment
+            increment = current - (pbar.pbar.n if hasattr(pbar, 'pbar') else 0)
+            if increment > 0:
+                pbar.update(increment, msg=message)
+            if current >= total:
                 pbar.close()
                 pbar = None
         

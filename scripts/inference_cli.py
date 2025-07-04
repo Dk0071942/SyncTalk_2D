@@ -10,6 +10,9 @@ import os
 import sys
 from pathlib import Path
 
+# Add parent directory to path so we can import synctalk module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Import from refactored synctalk package
 from synctalk.processing import StandardVideoProcessor, CoreClipsProcessor
 from synctalk.config import get_default_config, apply_preset

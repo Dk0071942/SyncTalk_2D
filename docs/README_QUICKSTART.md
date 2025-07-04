@@ -31,13 +31,13 @@ python run_synctalk.py info --name MODEL_NAME
 #### Using the direct CLI:
 ```bash
 # Standard mode with options
-python inference_cli.py --name MODEL_NAME --audio_path audio.wav --start_frame 0
+python scripts/inference_cli.py --name MODEL_NAME --audio_path audio.wav --start_frame 0
 
 # Core clips mode with VAD options
-python inference_cli.py --name MODEL_NAME --audio_path audio.wav --mode core_clips --vad_threshold 0.5
+python scripts/inference_cli.py --name MODEL_NAME --audio_path audio.wav --mode core_clips --vad_threshold 0.5
 
 # With quality preset
-python inference_cli.py --name MODEL_NAME --audio_path audio.wav --preset high_quality
+python scripts/inference_cli.py --name MODEL_NAME --audio_path audio.wav --preset high_quality
 ```
 
 ### 3. Python API
@@ -79,8 +79,19 @@ apply_preset(config, "high_quality")
 5. **Type Safety**: Full type hints for better IDE support
 6. **Better Error Handling**: More informative error messages
 
+## Available Models
+
+Check the `checkpoint/` directory for available models. Common models include:
+- **AD2.2**: Commercial avatar model
+- **LS1**: Another trained avatar
+
+To list all available models:
+```bash
+python run_synctalk.py list
+```
+
 ## Migration from Old Code
 
 The refactored code maintains backward compatibility. Old scripts should continue to work, but we recommend updating to use the new structure for better performance and features.
 
-See [REFACTORED_ARCHITECTURE.md](docs/REFACTORED_ARCHITECTURE.md) for detailed documentation.
+See [REFACTORED_ARCHITECTURE.md](REFACTORED_ARCHITECTURE.md) for detailed documentation.

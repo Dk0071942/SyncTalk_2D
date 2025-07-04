@@ -13,11 +13,11 @@ import subprocess
 from pathlib import Path
 from torch.utils.data import DataLoader
 from typing import Optional, Callable, Tuple, Dict, Any
-from tqdm import tqdm
-
 # Import required models and utilities
 import sys
 sys.path.append('.')
+from synctalk.utils.ffmpeg_utils import FFmpegConfig, merge_audio_video
+from synctalk.utils.progress import ProgressBar
 from synctalk.core.unet_328 import Model
 from synctalk.core.utils import AudioEncoder, AudDataset, get_audio_features
 
@@ -295,22 +295,13 @@ class StandardVideoProcessor:
             writer.write(frame)
         writer.release()
         
-        # Merge with audio using ffmpeg
-        cmd = [
-            'ffmpeg', '-y', '-v', 'error', '-nostats',
-            '-i', temp_output,
-            '-i', audio_path,
-            '-c:v', 'libx264',
-            '-c:a', 'aac',
-            '-crf', '20',
-            '-shortest',  # Match video duration to shorter stream
-            output_path
-        ]
-        
+        # Merge with audio using standardized ffmpeg parameters
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to merge audio: {e.stderr}")
+            result = merge_audio_video(temp_output, audio_path, output_path)
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg failed: {result.stderr}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to merge audio: {e}")
         finally:
             # Clean up temp file
             if os.path.exists(temp_output):
@@ -464,10 +455,12 @@ class StandardVideoProcessor:
         def tqdm_callback(current, total, message):
             nonlocal pbar
             if pbar is None:
-                pbar = tqdm(total=total, desc="Generating video")
-            pbar.update(current - pbar.n)
-            pbar.set_description(message)
-            if current >= total and pbar is not None:
+                pbar = ProgressBar(total=total, desc="Generating video", leave=False)
+            # Calculate actual progress increment
+            increment = current - (pbar.pbar.n if hasattr(pbar, 'pbar') else 0)
+            if increment > 0:
+                pbar.update(increment, msg=message)
+            if current >= total:
                 pbar.close()
                 pbar = None
         

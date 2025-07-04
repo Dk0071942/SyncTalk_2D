@@ -18,6 +18,7 @@ from pathlib import Path
 # Import landmark detector - using relative import to avoid circular dependencies
 import sys
 sys.path.append('./data_utils')
+from ..utils.ffmpeg_utils import convert_fps as ffmpeg_convert_fps
 from data_utils.get_landmark import Landmark
 
 
@@ -80,19 +81,13 @@ class VideoProcessor:
             
             converted_path = os.path.join(self.temp_dir, "video_25fps.mp4")
             
-            # Use subprocess instead of os.system for better error handling
-            cmd = [
-                'ffmpeg', '-y', '-v', 'error', '-nostats',
-                '-i', video_path,
-                '-vf', 'fps=25',
-                '-c:v', 'libx264',
-                converted_path
-            ]
-            
+            # Use standardized FPS conversion
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            except subprocess.CalledProcessError as e:
-                raise ValueError(f"Failed to convert video to 25fps: {e.stderr}")
+                result = ffmpeg_convert_fps(video_path, converted_path, target_fps=25)
+                if result.returncode != 0:
+                    raise ValueError(f"Failed to convert video to 25fps: {result.stderr}")
+            except Exception as e:
+                raise ValueError(f"Failed to convert video to 25fps: {e}")
             
             video_to_process = converted_path
             cap = cv2.VideoCapture(converted_path)

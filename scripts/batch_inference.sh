@@ -29,7 +29,7 @@ echo "Starting batch processing for avatar '$AVATAR_NAME' with audio from '$AUDI
 # Find and process all files in the audio directory.
 find "$AUDIO_DIR" -type f -print0 | while IFS= read -r -d $'\0' audio_file; do
   echo "Processing '$audio_file'..."
-  python scripts/inference_328.py --name "$AVATAR_NAME" --audio_path "$audio_file" < /dev/null
+  python scripts/inference_cli.py --name "$AVATAR_NAME" --audio_path "$audio_file" < /dev/null
 done
 
 echo "Batch processing finished." 

@@ -1,13 +1,10 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
 import cv2
 import os
 import numpy as np
-from torch import optim
 import random
-import argparse
 
 
 
@@ -220,51 +217,8 @@ class SyncNet_color(nn.Module):
         
         return audio_embedding, face_embedding
 
-logloss = nn.BCELoss()
-def cosine_loss(a, v, y):
-    d = nn.functional.cosine_similarity(a, v)
-    loss = logloss(d.unsqueeze(1), y)
+# Loss functions have been moved to synctalk.training.losses
+    
+# Training functionality has been moved to synctalk.training.syncnet_trainer
 
-    return loss
-    
-def train(save_dir, dataset_dir, mode):
-    print(f'SyncNet training started...')
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
-        
-    train_dataset = Dataset(dataset_dir, mode=mode)
-    train_data_loader = DataLoader(
-        train_dataset, batch_size=16, shuffle=True,
-        num_workers=16)
-    model = SyncNet_color(mode).cuda()
-    optimizer = optim.Adam([p for p in model.parameters() if p.requires_grad],
-                           lr=0.001)
-    best_loss = 1000000
-    for epoch in range(100):
-        for batch in train_data_loader:
-            imgT, audioT, y = batch
-            imgT = imgT.cuda()
-            audioT = audioT.cuda()
-            y = y.cuda()
-            audio_embedding, face_embedding = model(imgT, audioT)
-            loss = cosine_loss(audio_embedding, face_embedding, y)
-            loss.backward()
-            optimizer.step()
-        print(f'SyncNet training epoch: {epoch+1}, loss: {loss.item()}')
-        if loss.item() < best_loss:
-            best_loss = loss.item()
-            torch.save(model.state_dict(), os.path.join(save_dir, str(epoch+1)+'.pth'))
-    print(f'SyncNet training finished...')
-
-            
-    
-    
-    
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--save_dir', default='test', type=str)
-    parser.add_argument('--dataset_dir', default='./dataset/May', type=str)
-    parser.add_argument('--asr', default='ave', type=str)
-    opt = parser.parse_args()
-    
-    train(opt.save_dir, opt.dataset_dir, opt.asr)
+# Command-line interface moved to scripts/train_328.py

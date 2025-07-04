@@ -39,7 +39,7 @@ Say: "I'll spawn agents to tackle different aspects of this problem" whenever a 
 - Before declaring "done"
 - **WHEN HOOKS FAIL WITH ERRORS** ❌
 
-Run: `make fmt && make test && make lint`
+Run appropriate validation commands for the project (e.g., linting, testing)
 
 > Why: You can lose track of what's actually working. These checkpoints prevent cascading failures.
 
@@ -83,50 +83,55 @@ Your code must be 100% clean. No exceptions.
 - [ ] What comes next
 ```
 
-## Go-Specific Rules
+## Python-Specific Rules
 
 ### FORBIDDEN - NEVER DO THESE:
-- **NO interface{}** or **any{}** - use concrete types!
-- **NO time.Sleep()** or busy waits - use channels for synchronization!
+- **NO** generic `except:` clauses - always specify exception types!
+- **NO** mutable default arguments in functions
 - **NO** keeping old and new code together
 - **NO** migration functions or compatibility layers
-- **NO** versioned function names (processV2, handleNew)
-- **NO** custom error struct hierarchies
+- **NO** versioned function names (process_v2, handle_new)
+- **NO** complex inheritance hierarchies
 - **NO** TODOs in final code
 
-> **AUTOMATED ENFORCEMENT**: The smart-lint hook will BLOCK commits that violate these rules.  
+> **AUTOMATED ENFORCEMENT**: Linters and hooks will BLOCK commits that violate these rules.  
 > When you see `❌ FORBIDDEN PATTERN`, you MUST fix it immediately!
 
 ### Required Standards:
 - **Delete** old code when replacing it
-- **Meaningful names**: `userID` not `id`
+- **Meaningful names**: `user_id` not `id`
 - **Early returns** to reduce nesting
-- **Concrete types** from constructors: `func NewServer() *Server`
-- **Simple errors**: `return fmt.Errorf("context: %w", err)`
-- **Table-driven tests** for complex logic
-- **Channels for synchronization**: Use channels to signal readiness, not sleep
-- **Select for timeouts**: Use `select` with timeout channels, not sleep loops
+- **Type hints** for all functions: `def process(data: dict) -> str:`
+- **Docstrings** for all public functions and classes
+- **Simple exceptions**: `raise ValueError(f"Invalid input: {value}")`
+- **pytest** for all tests
+- **Path objects** for file operations: Use `pathlib.Path` not string concatenation
 
 ## Implementation Standards
 
 ### Our code is complete when:
-- ? All linters pass with zero issues
-- ? All tests pass  
-- ? Feature works end-to-end
-- ? Old code is deleted
-- ? Godoc on all exported symbols
+- ✓ All linters pass with zero issues
+- ✓ All tests pass  
+- ✓ Feature works end-to-end
+- ✓ Old code is deleted
+- ✓ Docstrings on all public functions/classes
 
 ### Testing Strategy
-- Complex business logic ? Write tests first
-- Simple CRUD ? Write tests after
-- Hot paths ? Add benchmarks
-- Skip tests for main() and simple CLI parsing
+- Complex business logic → Write tests first
+- Simple utilities → Write tests after
+- Performance critical → Add benchmarks
+- Skip tests for simple CLI argument parsing
 
 ### Project Structure
 ```
-cmd/        # Application entrypoints
-internal/   # Private code (the majority goes here)
-pkg/        # Public libraries (only if truly reusable)
+synctalk/       # Main package with modular components
+scripts/        # Standalone scripts (training, inference)
+data_utils/     # Data preprocessing utilities
+tests/          # Test suite
+docs/           # Documentation
+demo/           # Demo files and examples
+checkpoint/     # Model checkpoints
+dataset/        # Training datasets
 ```
 
 ## Problem-Solving Together
@@ -146,12 +151,14 @@ My insights on better approaches are valued - please ask for them!
 ### **Measure First**:
 - No premature optimization
 - Benchmark before claiming something is faster
-- Use pprof for real bottlenecks
+- Use cProfile or line_profiler for real bottlenecks
+- Memory profiling with memory_profiler when needed
 
 ### **Security Always**:
-- Validate all inputs
-- Use crypto/rand for randomness
-- Prepared statements for SQL (never concatenate!)
+- Validate all inputs (especially file paths)
+- Use secrets module for secure randomness
+- Never use eval() or exec() with user input
+- Sanitize paths to prevent directory traversal
 
 ## Communication Protocol
 
