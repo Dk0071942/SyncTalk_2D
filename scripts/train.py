@@ -7,9 +7,9 @@ import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from datasetsss import MyDataset
-from syncnet import SyncNet_color
-from unet import Model
+from synctalk.core.datasetsss import MyDataset
+from synctalk.core.syncnet import SyncNet_color
+from synctalk.core.unet import Model
 import random
 import torchvision.models as models
 

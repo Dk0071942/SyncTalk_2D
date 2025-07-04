@@ -28,7 +28,7 @@ from .standard_processor import StandardVideoProcessor
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from utils import get_audio_features
+from synctalk.core.utils import get_audio_features
 
 
 class CoreClipsProcessor:

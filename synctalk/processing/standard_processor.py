@@ -18,8 +18,8 @@ from tqdm import tqdm
 # Import required models and utilities
 import sys
 sys.path.append('.')
-from unet_328 import Model
-from utils import AudioEncoder, AudDataset, get_audio_features
+from synctalk.core.unet_328 import Model
+from synctalk.core.utils import AudioEncoder, AudDataset, get_audio_features
 
 
 class StandardVideoProcessor:

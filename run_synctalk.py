@@ -53,7 +53,7 @@ def main():
     
     if args.command == 'generate':
         # Import and run inference
-        from inference_refactored import main as run_inference
+        from scripts.inference_cli import main as run_inference
         
         # Build command line arguments
         cmd_args = [
@@ -70,12 +70,12 @@ def main():
             cmd_args.extend(['--output_name', output_name])
         
         # Replace sys.argv for the inference script
-        sys.argv = ['inference_refactored.py'] + cmd_args
+        sys.argv = ['inference_cli.py'] + cmd_args
         run_inference()
         
     elif args.command == 'web':
         # Import and run Gradio app
-        from app_gradio_refactored import create_interface
+        from app_gradio import create_interface
         
         print(f"Starting web interface on port {args.port}...")
         demo = create_interface()
