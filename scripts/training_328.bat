@@ -26,29 +26,29 @@ if errorlevel 1 (
     exit /b 1
 )
 
-@REM REM Step 2: Train SyncNet
-@REM echo Step 2: Training SyncNet...
-@REM python synctalk/core/syncnet_328.py --save_dir ./syncnet_ckpt/%file_name% --dataset_dir %data_dir% --asr %asr%
-@REM if errorlevel 1 (
-@REM     echo Error training SyncNet!
-@REM     exit /b 1
-@REM )
+REM Step 2: Train SyncNet
+echo Step 2: Training SyncNet...
+python synctalk/core/syncnet_328.py --save_dir ./syncnet_ckpt/%file_name% --dataset_dir %data_dir% --asr %asr%
+if errorlevel 1 (
+    echo Error training SyncNet!
+    exit /b 1
+)
 
-@REM REM Step 3: Find latest checkpoint
-@REM echo Step 3: Finding latest checkpoint...
-@REM for /f "delims=" %%i in ('dir /b /od "./syncnet_ckpt/%file_name%/*.pth" 2^>nul') do set syncnet_checkpoint=./syncnet_ckpt/%file_name%/%%i
-@REM if "%syncnet_checkpoint%"=="" (
-@REM     echo Error: No checkpoint found in ./syncnet_ckpt/%file_name%/
-@REM     exit /b 1
-@REM )
-@REM echo Found checkpoint: %syncnet_checkpoint%
+REM Step 3: Find latest checkpoint
+echo Step 3: Finding latest checkpoint...
+for /f "delims=" %%i in ('dir /b /od "./syncnet_ckpt/%file_name%/*.pth" 2^>nul') do set syncnet_checkpoint=./syncnet_ckpt/%file_name%/%%i
+if "%syncnet_checkpoint%"=="" (
+    echo Error: No checkpoint found in ./syncnet_ckpt/%file_name%/
+    exit /b 1
+)
+echo Found checkpoint: %syncnet_checkpoint%
 
-@REM REM Step 4: Train main model
-@REM echo Step 4: Training main model...
-@REM python scripts/train_328.py --dataset_dir %data_dir% --save_dir ./checkpoint/%file_name% --asr %asr% --use_syncnet --syncnet_checkpoint %syncnet_checkpoint%
-@REM if errorlevel 1 (
-@REM     echo Error training model!
-@REM     exit /b 1
-@REM )
+REM Step 4: Train main model
+echo Step 4: Training main model...
+python scripts/train_328.py --dataset_dir %data_dir% --save_dir ./checkpoint/%file_name% --asr %asr% --use_syncnet --syncnet_checkpoint %syncnet_checkpoint%
+if errorlevel 1 (
+    echo Error training model!
+    exit /b 1
+)
 
-@REM echo Training complete! Model saved to ./checkpoint/%file_name%/
+echo Training complete! Model saved to ./checkpoint/%file_name%/
