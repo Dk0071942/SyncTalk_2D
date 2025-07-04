@@ -3,6 +3,12 @@ set -e
 # Training script for SyncTalk 2D using separated preprocessing and training
 # Usage: bash training_328.sh file_name cuda_id
 
+# Activate conda environment if available
+if [ -f "/home/ubuntu/miniconda3/etc/profile.d/conda.sh" ]; then
+    source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+    conda activate synctalk_2d
+fi
+
 file_name=$1
 cuda_id=$2
 
