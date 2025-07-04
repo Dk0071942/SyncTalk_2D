@@ -64,7 +64,7 @@ echo "Trained datasets: ${datasets[*]}"
 # Shutdown if requested
 if [ "$SHUTDOWN" = "true" ]; then
     echo ""
-    echo "Shutting down the server in 10 seconds..."
-    sleep 10
+    echo "Shutting down the server in 100 seconds..."
+    sleep 100
     sudo shutdown -h now
 fi
