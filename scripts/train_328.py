@@ -157,7 +157,7 @@ def main():
     if last_checkpoint and os.path.exists(last_checkpoint):
         # Automatically continue from last checkpoint if it exists
         print(f"\n[INFO] Continuing from checkpoint: {last_checkpoint} (epoch {last_epoch})")
-        net.load_state_dict(torch.load(last_checkpoint))
+        net.load_state_dict(torch.load(last_checkpoint, weights_only=True))
         start_epoch = last_epoch
         
         # Check if we've already reached the target epochs

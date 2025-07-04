@@ -17,3 +17,6 @@ configargparse
 
 # Web interface
 gradio>=4.0.0
+
+# Plotting
+matplotlib
