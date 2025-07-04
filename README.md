@@ -17,12 +17,34 @@ Compared to the Ultralight-Digital-Human, we have improved the audio feature enc
 ## Setting up
 
 Set up the environment:
+
+### Windows
+```bash
+conda create -n synctalk_2d python=3.10
+conda activate synctalk_2d
+```
+
+### Linux
 ```bash
 conda create -n synctalk_2d python=3.10
 conda activate synctalk_2d
 ```
 
 Install dependencies:
+
+### Windows
+```bash
+# Install PyTorch with CUDA support
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+
+# Install FFmpeg (very important)
+conda install -c conda-forge ffmpeg=4.3.* x264
+
+# Install other dependencies
+pip install -r requirements.txt
+```
+
+### Linux
 ```bash
 # Install PyTorch with CUDA support
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
@@ -58,12 +80,42 @@ Then open http://localhost:7860 in your browser.
    - Example: dataset/May/May.mp4
 
 2. Run the process and training script:
+
+   ### Linux/macOS
    ```bash
-   bash training_328.sh name gpu_id
+   bash scripts/training_328.sh name gpu_id
    ```
-   - Example: `bash training_328.sh May 0`
-   - Waiting for training to complete, approximately 5 hours
-   - If OOM occurs, try reducing the size of batch_size
+   - Example: `bash scripts/training_328.sh May 0`
+   
+   ### Windows
+   
+   Option 1: Using the provided batch script (recommended)
+   ```cmd
+   scripts\training_328.bat name gpu_id
+   ```
+   - Example: `scripts\training_328.bat May 0`
+   
+   Option 2: Using Git Bash or WSL
+   ```bash
+   bash scripts/training_328.sh name gpu_id
+   ```
+   
+   Option 3: Using Command Prompt/PowerShell (run commands separately)
+   ```cmd
+   set CUDA_VISIBLE_DEVICES=gpu_id
+   python data_utils/process.py ./dataset/name/name.mp4
+   python synctalk/core/syncnet_328.py --save_dir ./syncnet_ckpt/name --dataset_dir ./dataset/name --asr ave
+   # Find the latest checkpoint file in ./syncnet_ckpt/name/*.pth
+   python scripts/train_328.py --dataset_dir ./dataset/name --save_dir ./checkpoint/name --asr ave --use_syncnet --syncnet_checkpoint ./syncnet_ckpt/name/your_checkpoint.pth
+   ```
+   - Replace `name` with your dataset name and `gpu_id` with your GPU device ID (e.g., 0)
+   - Replace `your_checkpoint.pth` with the actual checkpoint filename generated in the syncnet_ckpt folder
+   
+   **Note:** 
+   - Training takes approximately 5 hours
+   - If OOM (Out of Memory) occurs, try reducing the batch_size in the training script
+   - Windows users: Ensure CUDA toolkit is properly installed and NVIDIA GPU drivers are up to date
+   - Windows paths: Use forward slashes (/) or escaped backslashes (\\) in paths
 
 ## Inference
 
