@@ -5,19 +5,19 @@ import warnings
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from synctalk.utils.video_processor import UnifiedVideoProcessor
+from synctalk.processing.media_processor import MediaProcessor
 
 # Deprecation warning message
 DEPRECATION_MSG = (
     "This function is deprecated and will be removed in a future version. "
-    "Please use synctalk.utils.video_processor.UnifiedVideoProcessor instead."
+    "Please use synctalk.processing.media_processor.MediaProcessor instead."
 )
 
 # Keep individual functions for backward compatibility
 def extract_audio(path, out_path, sample_rate=16000):
     """Extract audio from video (backward compatibility wrapper)."""
     warnings.warn(f"extract_audio: {DEPRECATION_MSG}", DeprecationWarning, stacklevel=2)
-    processor = UnifiedVideoProcessor()
+    processor = MediaProcessor(use_temp=False)
     return processor.extract_audio(path, out_path, sample_rate)
     
 def extract_images(path, dataset_dir=None):
@@ -34,7 +34,7 @@ def extract_images(path, dataset_dir=None):
         dataset_dir = os.path.dirname(path)
     
     full_body_dir = os.path.join(dataset_dir, "full_body_img")
-    processor = UnifiedVideoProcessor()
+    processor = MediaProcessor(use_temp=False)
     processor.extract_frames(path, full_body_dir, convert_to_25fps=True)
     
 def get_audio_feature(wav_path):
@@ -58,7 +58,7 @@ def get_landmark(path, landmarks_dir, dataset_dir=None):
         dataset_dir = os.path.dirname(path)
     
     full_img_dir = os.path.join(dataset_dir, "full_body_img")
-    processor = UnifiedVideoProcessor()
+    processor = MediaProcessor(use_temp=False)
     processor.detect_landmarks(full_img_dir, landmarks_dir)
 
 if __name__ == "__main__":
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         base_dir = os.path.dirname(opt.path)
     
     # Use unified processor for complete processing
-    processor = UnifiedVideoProcessor()
+    processor = MediaProcessor(use_temp=False)
     success = processor.process_video_complete(
         video_path=opt.path,
         dataset_dir=base_dir,

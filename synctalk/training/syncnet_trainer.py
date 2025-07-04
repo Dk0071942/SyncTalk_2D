@@ -100,6 +100,13 @@ class SyncNetTrainer:
         if existing_epochs >= 90 and not force:
             print(f"[INFO] SyncNet already trained ({existing_epochs} epochs)")
             print(f"[INFO] Using checkpoint: {existing_checkpoint}")
+            
+            # Mark as completed if not already
+            self.state_manager.update_syncnet_training(
+                epochs=existing_epochs,
+                checkpoint=existing_checkpoint,
+                completed=True
+            )
             return existing_checkpoint
         
         # Determine starting epoch

@@ -12,7 +12,7 @@ import sys
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from synctalk.utils.video_processor import UnifiedVideoProcessor
+from synctalk.processing.media_processor import MediaProcessor
 
 
 class CoreClipsPreprocessor:
@@ -28,7 +28,7 @@ class CoreClipsPreprocessor:
         self.model_name = model_name
         self.core_clips_dir = Path("./core_clips")
         self.dataset_dir = Path("./dataset")
-        self.video_processor = UnifiedVideoProcessor()
+        self.video_processor = MediaProcessor(use_temp=False)
             
     def process_all_models(self):
         """Process core clips for all available models."""

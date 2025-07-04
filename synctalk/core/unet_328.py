@@ -204,13 +204,13 @@ class Model(nn.Module):
         ch = [32, 64, 128, 256, 512]
         
         if mode=='hubert':
-            print("hubert")   
+            print("model mode: hubert")   
             self.audio_model = AudioConvHubert()
         elif mode=='wenet':
-            print("wenet")  
+            print("model mode: wenet")  
             self.audio_model = AudioConvWenet()
         elif mode=='ave':
-            print("ave")
+            print("model mode: ave")
             self.audio_model = AudioConvAve()
             
         self.fuse_conv = nn.Sequential(

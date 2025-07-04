@@ -260,3 +260,52 @@ dataset/
 **SyncNet training restarts**: Fixed in latest version. The script now checks for existing SyncNet checkpoints before retraining.
 
 **Checkpoint directory issues**: SyncNet checkpoints are now saved in both the main directory and a `syncnet_ckpt` subdirectory for compatibility.
+
+## Recent Improvements (January 2025)
+
+### 🚀 Major Training Pipeline Refactoring
+The training pipeline has been significantly improved with robust state management and better architecture:
+
+#### **Modular Training Architecture**
+- New `synctalk.training` package with organized components
+- Training logic moved from scripts to reusable modules
+- Scripts now act as thin CLI wrappers
+
+#### **Automatic State Tracking**
+- Persistent state tracking with `.training_state.json`
+- Training can be interrupted and resumed without losing progress
+- Tracks preprocessing, SyncNet training, and main model training progress
+
+#### **Smart Checkpoint Management**
+- Saves checkpoints after every epoch (was every 25)
+- Automatic cleanup keeps only 3 most recent checkpoints
+- State file tracks checkpoint history for recovery
+- Training sufficiency detection (>90 epochs considered sufficient)
+
+#### **Enhanced Video Processing**
+- Unified MediaProcessor replacing duplicate video processing logic
+- Standardized FFmpeg encoding (CRF 18, preset slow, bt709 color space)
+- Clean progress bars preventing console clutter
+- Parallel batch processing support
+
+#### **Loss Tracking & Visualization**
+- Saves training loss history as JSON logs and PNG graphs
+- Tracks loss for every epoch with timestamps
+- Visual plots showing training progress
+
+#### **SyncNet Improvements**
+- Checkpoint continuation support (resume from existing checkpoints)
+- Automatic completion detection for sufficient training
+- Better state management and recovery
+
+### 🛠️ Migration Notes
+- Old training scripts have been removed/deprecated
+- State files are created automatically
+- Existing checkpoints remain compatible
+- Use `scripts/fix_training_state.py` if you encounter state file issues
+
+### 📊 New Training Features
+- **Force flag**: Use `--force` to override sufficiency detection and retrain
+- **Better error handling**: Improved error messages and recovery
+- **Preprocessing validation**: Automatic validation of preprocessed data
+- **Batch operations**: Enhanced batch preprocessing with parallel workers

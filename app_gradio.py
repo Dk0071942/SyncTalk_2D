@@ -109,7 +109,7 @@ class SyncTalkGradio:
             # Handle custom video processing
             if internal_mode == "custom":
                 progress(0.2, desc="Processing uploaded video...")
-                video_processor = VideoProcessor()
+                video_processor = VideoProcessor(use_temp=True)
                 
                 try:
                     # Define progress callback for video processing
@@ -118,7 +118,7 @@ class SyncTalkGradio:
                             scaled_progress = 0.2 + (current / total) * 0.1
                             progress(scaled_progress, desc=message)
                     
-                    custom_img_dir, custom_lms_dir, num_frames = video_processor.process_video(
+                    custom_img_dir, custom_lms_dir, num_frames = video_processor.process_video_temp(
                         video_file, progress_callback=video_progress_callback
                     )
                     print(f"Processed video: {num_frames} frames extracted")

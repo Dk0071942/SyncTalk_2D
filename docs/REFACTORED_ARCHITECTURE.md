@@ -14,7 +14,7 @@ synctalk/
 ├── processing/              # Video processing modules
 │   ├── __init__.py
 │   ├── base.py             # Base classes and interfaces
-│   ├── video_preprocessor.py    # Video preprocessing (frame extraction)
+│   ├── media_processor.py  # Unified media processing (frame extraction, landmarks, audio)
 │   ├── standard_processor.py    # Standard mode processor
 │   └── core_clips_processor.py  # Core clips mode processor
 ├── core/                    # Core functionality
@@ -29,10 +29,19 @@ synctalk/
 │   ├── datasetsss.py       # Dataset loader (256x256)
 │   ├── datasetsss_328.py   # Dataset loader (328x328)
 │   └── utils.py            # Core utility functions
+├── training/                # Training modules (NEW)
+│   ├── __init__.py
+│   ├── losses.py           # Loss functions
+│   ├── state_manager.py    # Training state persistence
+│   ├── trainer.py          # Main model trainer
+│   └── syncnet_trainer.py  # SyncNet trainer
 └── utils/                   # Utility functions
     ├── __init__.py
     ├── face_blending.py    # Face blending utilities
-    └── video_processor.py  # Unified video processing utilities
+    ├── preprocessing_utils.py # Preprocessing status and validation
+    ├── batch_processing.py # Batch processing utilities
+    ├── ffmpeg_utils.py     # Standardized FFmpeg operations
+    └── progress.py         # Clean progress bar utilities
 ```
 
 ## Key Components
@@ -44,10 +53,12 @@ synctalk/
 - Provides shared functionality for all processors
 - Includes `ProgressTracker` utility class
 
-#### VideoProcessor (`processing/video_preprocessor.py`)
-- Handles video preprocessing tasks
-- Extracts frames and detects facial landmarks
-- Supports custom video templates
+#### MediaProcessor (`processing/media_processor.py`)
+- Unified media processing for all video/audio tasks
+- Extracts frames with FPS conversion and detects facial landmarks
+- Handles audio extraction and feature processing
+- Supports both dataset creation and temporary processing modes
+- Replaces duplicate video processing logic from utils/
 
 #### StandardVideoProcessor (`processing/standard_processor.py`)
 - Implements standard mode video generation
@@ -95,7 +106,32 @@ synctalk/
 - Audio feature extraction and alignment
 - Support for multiple audio encoders (AVE, Hubert, WaveNet)
 
-### 3. Configuration System
+### 3. Training Modules (NEW)
+
+#### TrainingStateManager (`training/state_manager.py`)
+- Persistent training state tracking with JSON files
+- Manages preprocessing, SyncNet, and main training progress
+- Automatic checkpoint history and recovery
+- Thread-safe state updates
+
+#### SyncNetTrainer (`training/syncnet_trainer.py`)
+- Dedicated SyncNet training with checkpoint continuation
+- Automatic completion detection (>90 epochs)
+- Loss history tracking and visualization
+- Smart checkpoint management (keep 3 recent)
+
+#### ModelTrainer (`training/trainer.py`)
+- Main model training with robust state management
+- Automatic checkpoint saving every epoch
+- Loss visualization and history tracking
+- Resume training from any checkpoint
+
+#### Loss Functions (`training/losses.py`)
+- PerceptualLoss for visual quality
+- Cosine loss for audio-visual synchronization
+- Modular loss function architecture
+
+### 4. Configuration System
 
 #### Configuration Management (`config.py`)
 - Dataclass-based configuration with validation
@@ -112,7 +148,7 @@ SyncTalkConfig
 └── ProcessingConfig  # Processing behavior settings
 ```
 
-### 4. Utilities
+### 5. Utilities
 
 #### Face Blending (`utils/face_blending.py`)
 - Face mask creation and blending functions
@@ -120,11 +156,27 @@ SyncTalkConfig
 - Landmark alignment utilities
 - Improved documentation and type hints
 
-#### Video Processing (`utils/video_processor.py`)
-- Unified video processing pipeline
-- Frame extraction and preprocessing
-- Landmark detection integration
-- Audio feature extraction coordination
+#### Preprocessing Utilities (`utils/preprocessing_utils.py`)
+- Status checking and validation functions
+- Metadata handling and persistence
+- Dataset validation and structure verification
+
+#### Batch Processing (`utils/batch_processing.py`)
+- Parallel batch video processing
+- JSON configuration support
+- Progress tracking and result reporting
+- Automatic skip of processed datasets
+
+#### FFmpeg Utilities (`utils/ffmpeg_utils.py`)
+- Standardized video encoding (CRF 18, bt709 color space)
+- Consistent audio extraction parameters
+- FPS conversion and optimization flags
+
+#### Progress Utilities (`utils/progress.py`)
+- Clean progress bars with proper cleanup
+- Thread-safe console output
+- Nested progress bar support
+- Prevents console clutter
 
 ## Processing Workflows
 

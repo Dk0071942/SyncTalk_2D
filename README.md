@@ -14,6 +14,17 @@ Compared to the Ultralight-Digital-Human, we have improved the audio feature enc
 - 🌐 **Web Interface**: User-friendly Gradio interface for easy interaction
 - 🔄 **Seamless Looping**: Videos can start and end with the same frame
 
+## 🚀 Recent Improvements (January 2025)
+
+**Major Training Pipeline Refactoring:**
+- ✅ **Robust State Management**: Automatic training state persistence with `.training_state.json`
+- ✅ **Smart Checkpoints**: Save every epoch, keep 3 recent, auto-cleanup
+- ✅ **Training Continuation**: Resume from interruptions without losing progress
+- ✅ **Unified Video Processing**: Eliminated duplicate code, standardized FFmpeg encoding
+- ✅ **Loss Visualization**: Automatic loss graphs and JSON logs
+- ✅ **Modular Architecture**: Training logic moved to `synctalk.training` package
+- ✅ **Enhanced Error Handling**: Better debugging and recovery capabilities
+
 ## Setting up
 
 Set up the environment:

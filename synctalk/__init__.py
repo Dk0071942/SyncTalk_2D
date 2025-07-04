@@ -8,9 +8,12 @@ video generation system with support for both standard and core clips modes.
 __version__ = "1.0.0"
 
 # Import main processing classes for easy access
-from .processing.video_preprocessor import VideoProcessor
+from .processing.media_processor import MediaProcessor
 from .processing.standard_processor import StandardVideoProcessor
 from .processing.core_clips_processor import CoreClipsProcessor
+
+# Backward compatibility alias
+VideoProcessor = MediaProcessor
 
 # Import core components
 from .core.vad import SileroVAD, AudioSegment
@@ -28,6 +31,7 @@ from .utils.face_blending import (
 
 __all__ = [
     # Processing
+    'MediaProcessor',
     'VideoProcessor',
     'StandardVideoProcessor', 
     'CoreClipsProcessor',

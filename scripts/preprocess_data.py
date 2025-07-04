@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from synctalk.utils.video_processor import UnifiedVideoProcessor
+from synctalk.processing.media_processor import MediaProcessor
 from synctalk.utils.preprocessing_utils import check_preprocessing_status, get_preprocessing_info, save_preprocessing_metadata
 
 
@@ -97,8 +97,8 @@ def main():
     
     # Run preprocessing
     try:
-        # Use the unified video processor
-        processor = UnifiedVideoProcessor()
+        # Use the unified media processor
+        processor = MediaProcessor(use_temp=False)
         
         # Define progress callback for better user feedback
         def progress_callback(current, total, message):
