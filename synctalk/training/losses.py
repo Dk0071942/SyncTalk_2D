@@ -29,7 +29,7 @@ class PerceptualLoss:
         model = nn.Sequential()
         model = model.cuda()
         
-        for i, layer in enumerate(list(cnn)):
+        for i, layer in enumerate(cnn):
             model.add_module(str(i), layer)
             if i == conv_3_3_layer:
                 break
@@ -68,5 +68,9 @@ def cosine_loss(audio_embedding, visual_embedding, labels):
     """
     logloss = nn.BCELoss()
     d = nn.functional.cosine_similarity(audio_embedding, visual_embedding)
+    # Clamp cosine similarity to valid range [0, 1] for BCE loss
+    # Cosine similarity is in [-1, 1], so we transform to [0, 1]
+    d = (d + 1) / 2  # Transform from [-1, 1] to [0, 1]
+    d = torch.clamp(d, min=1e-7, max=1-1e-7)  # Avoid exact 0 or 1 for numerical stability
     loss = logloss(d.unsqueeze(1), labels)
     return loss

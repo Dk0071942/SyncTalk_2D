@@ -143,7 +143,7 @@ class SyncNetTrainer:
         if start_epoch > 0 and existing_checkpoint and os.path.exists(existing_checkpoint):
             try:
                 # Load model state
-                checkpoint_data = torch.load(existing_checkpoint)
+                checkpoint_data = torch.load(existing_checkpoint, weights_only=True)
                 if isinstance(checkpoint_data, dict):
                     # Handle checkpoint with metadata
                     model.load_state_dict(checkpoint_data.get('model_state_dict', checkpoint_data))
@@ -190,6 +190,8 @@ class SyncNetTrainer:
                 
                 # Backward pass
                 loss.backward()
+                # Gradient clipping to prevent instability
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
                 optimizer.zero_grad()
                 
@@ -249,11 +251,19 @@ class SyncNetTrainer:
         # Save loss history
         self.save_loss_history()
         
-        # Mark as completed
+        # Extract actual epochs from best checkpoint filename
+        actual_epochs = 0
+        if best_checkpoint and os.path.exists(best_checkpoint):
+            try:
+                actual_epochs = int(os.path.basename(best_checkpoint).split('.')[0])
+            except:
+                actual_epochs = epochs  # Fallback to target epochs if parsing fails
+        
+        # Mark as completed with actual epochs from checkpoint
         self.state_manager.update_syncnet_training(
-            epochs=epochs,
+            epochs=actual_epochs,
             checkpoint=best_checkpoint,
-            completed=True
+            completed=(actual_epochs >= 90)  # Consider complete if reached 90+ epochs
         )
         
         return best_checkpoint
@@ -262,37 +272,71 @@ class SyncNetTrainer:
         """
         Save SyncNet loss history as both JSON log and visual graph.
         """
-        if not self.loss_history:
-            return
-        
-        # Save as JSON log
-        log_path = os.path.join(self.save_dir, 'syncnet_training_log.json')
-        with open(log_path, 'w') as f:
-            json.dump(self.loss_history, f, indent=2)
-        print(f"[INFO] Saved SyncNet training log to {log_path}")
-        
-        # Save as graph
-        plt.figure(figsize=(10, 6))
-        epochs = [item['epoch'] for item in self.loss_history]
-        losses = [item['loss'] for item in self.loss_history]
-        
-        plt.plot(epochs, losses, 'g-', linewidth=2, label='SyncNet Loss')
-        plt.xlabel('Epoch', fontsize=12)
-        plt.ylabel('Cosine Loss', fontsize=12)
-        plt.title('SyncNet Training Loss History', fontsize=14)
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-        
-        # Add some statistics
-        min_loss = min(losses)
-        min_epoch = epochs[losses.index(min_loss)]
-        plt.axhline(y=min_loss, color='r', linestyle='--', alpha=0.5)
-        plt.text(epochs[-1] * 0.02, min_loss * 1.01, f'Min: {min_loss:.6f} @ epoch {min_epoch}', 
-                 fontsize=10, color='red')
-        
-        graph_path = os.path.join(self.save_dir, 'syncnet_loss_history.png')
-        plt.tight_layout()
-        plt.savefig(graph_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"[INFO] Saved SyncNet loss graph to {graph_path}")
+        try:
+            if not self.loss_history:
+                print("[WARNING] No loss history to save")
+                return
+            
+            # Save as JSON log
+            log_path = os.path.join(self.save_dir, 'syncnet_training_log.json')
+            try:
+                with open(log_path, 'w') as f:
+                    json.dump(self.loss_history, f, indent=2)
+                print(f"[INFO] Saved SyncNet training log to {log_path}")
+            except Exception as e:
+                print(f"[WARNING] Failed to save training log: {e}")
+            
+            # Save as graph - with error handling
+            try:
+                # Filter out any invalid entries
+                valid_entries = [item for item in self.loss_history 
+                               if isinstance(item.get('epoch'), (int, float)) 
+                               and isinstance(item.get('loss'), (int, float))
+                               and not (item.get('loss') is None or item.get('loss') != item.get('loss'))]  # Check for NaN
+                
+                if not valid_entries:
+                    print("[WARNING] No valid loss data to plot")
+                    return
+                
+                plt.figure(figsize=(10, 6))
+                epochs = [item['epoch'] for item in valid_entries]
+                losses = [item['loss'] for item in valid_entries]
+                
+                # Ensure we have data to plot
+                if len(epochs) == 0 or len(losses) == 0:
+                    print("[WARNING] Empty data for plotting")
+                    plt.close()
+                    return
+                
+                plt.plot(epochs, losses, 'g-', linewidth=2, label='SyncNet Loss')
+                plt.xlabel('Epoch', fontsize=12)
+                plt.ylabel('Cosine Loss', fontsize=12)
+                plt.title('SyncNet Training Loss History', fontsize=14)
+                plt.grid(True, alpha=0.3)
+                plt.legend()
+                
+                # Add statistics only if we have valid data
+                if losses:
+                    min_loss = min(losses)
+                    min_epoch = epochs[losses.index(min_loss)]
+                    plt.axhline(y=min_loss, color='r', linestyle='--', alpha=0.5)
+                    
+                    # Safely position text
+                    text_x = max(1, epochs[-1] * 0.02) if epochs else 1
+                    text_y = min_loss * 1.01 if min_loss > 0 else min_loss + 0.0001
+                    plt.text(text_x, text_y, f'Min: {min_loss:.6f} @ epoch {min_epoch}', 
+                             fontsize=10, color='red')
+                
+                graph_path = os.path.join(self.save_dir, 'syncnet_loss_history.png')
+                plt.tight_layout()
+                plt.savefig(graph_path, dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                print(f"[INFO] Saved SyncNet loss graph to {graph_path}")
+                
+            except Exception as e:
+                print(f"[WARNING] Failed to save loss graph: {e}")
+                plt.close()  # Ensure we close the figure even on error
+                
+        except Exception as e:
+            print(f"[ERROR] Unexpected error in save_loss_history: {e}")

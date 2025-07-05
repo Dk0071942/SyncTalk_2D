@@ -219,10 +219,6 @@ class MediaProcessor:
                 frame_count += 1
                 
                 pbar.update(1)
-                
-                if progress_callback and frame_count % 10 == 0:
-                    progress_callback(frame_count, total_frames, 
-                                    f"Extracting frame {frame_count}/{total_frames}")
         
         cap.release()
         
