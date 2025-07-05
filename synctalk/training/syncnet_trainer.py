@@ -200,7 +200,11 @@ class SyncNetTrainer:
             
             # Average loss for epoch
             avg_loss = epoch_loss / num_batches if num_batches > 0 else epoch_loss
-            pbar.set_description(f'SyncNet training epoch: {epoch+1}, loss: {avg_loss:.4f}')
+            # Use scientific notation for very small losses
+            if avg_loss < 1e-4:
+                pbar.set_description(f'SyncNet training epoch: {epoch+1}, loss: {avg_loss:.2e}')
+            else:
+                pbar.set_description(f'SyncNet training epoch: {epoch+1}, loss: {avg_loss:.6f}')
             
             # Track loss history
             self.loss_history.append({
@@ -233,7 +237,11 @@ class SyncNetTrainer:
                     'loss_history': self.loss_history[-10:]  # Keep last 10 epochs for reference
                 }, checkpoint_path)
                 best_checkpoint = checkpoint_path
-                print(f'  [INFO] Better loss! Saved checkpoint: {checkpoint_path}')
+                # Display loss in appropriate format
+                if best_loss < 1e-4:
+                    print(f'  [INFO] Better loss ({best_loss:.2e})! Saved checkpoint: {checkpoint_path}')
+                else:
+                    print(f'  [INFO] Better loss ({best_loss:.6f})! Saved checkpoint: {checkpoint_path}')
                 
                 # Update state with best loss info
                 self.state_manager.state['syncnet_training']['best_loss'] = best_loss

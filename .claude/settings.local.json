@@ -9,7 +9,8 @@
       "Bash(grep:*)",
       "Bash(tree:*)",
       "Bash(rg:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(nvidia-smi:*)"
     ],
     "deny": []
   }
